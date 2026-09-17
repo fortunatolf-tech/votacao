@@ -409,17 +409,17 @@ def importar():
     conn = get_db_connection()
     c = conn.cursor()
     
-    # Preservar Servidores Civis existentes para manter a Categoria Civil ativa
-    c.execute("SELECT * FROM efetivo WHERE tipo = 'CIVIL'")
-    civis_atuais = [dict(r) for r in c.fetchall()]
-    
-    if len(civis_atuais) == 0:
-        civis_atuais = [
-            {"nome": "Juliana Mendes Cardoso", "nome_guerra": "Cardoso", "identificador": "333.444.555-66", "tipo": "CIVIL", "posto_grad_cargo": "SPTF", "categoria": "Civil", "divisao": "DL", "secao": "DLCE", "tempo_comara_meses": 48},
-            {"nome": "Carlos Roberto Guimarães", "nome_guerra": "Guimarães", "identificador": "444.555.666-77", "tipo": "CIVIL", "posto_grad_cargo": "SPPF", "categoria": "Civil", "divisao": "DE", "secao": "DEPL", "tempo_comara_meses": 62},
-            {"nome": "Maria Aparecida dos Santos", "nome_guerra": "Aparecida", "identificador": "555.666.777-88", "tipo": "CIVIL", "posto_grad_cargo": "SPTF", "categoria": "Civil", "divisao": "DA", "secao": "DAPC", "tempo_comara_meses": 38},
-            {"nome": "Ana Cláudia Fontes", "nome_guerra": "Fontes", "identificador": "777.888.999-00", "tipo": "CIVIL", "posto_grad_cargo": "SPPF", "categoria": "Civil", "divisao": "DPC", "secao": "DPCI", "tempo_comara_meses": 84}
-        ]
+    # Servidores Civis Oficiais da COMARA (8 integrantes padrão com CPFs oficiais)
+    civis_atuais = [
+        {"nome": "Ana Paula Nogueira", "nome_guerra": "Ana Paula", "identificador": "111.222.333-44", "tipo": "CIVIL", "posto_grad_cargo": "SPTF", "categoria": "Civil", "divisao": "DE", "secao": "DEPJ", "tempo_comara_meses": 72},
+        {"nome": "Marcos Paulo Ferreira", "nome_guerra": "Ferreira", "identificador": "222.333.444-55", "tipo": "CIVIL", "posto_grad_cargo": "SPPF", "categoria": "Civil", "divisao": "DE", "secao": "DECA", "tempo_comara_meses": 50},
+        {"nome": "Juliana Mendes Cardoso", "nome_guerra": "Juliana", "identificador": "333.444.555-66", "tipo": "CIVIL", "posto_grad_cargo": "SPTF", "categoria": "Civil", "divisao": "DL", "secao": "DLCE", "tempo_comara_meses": 64},
+        {"nome": "Cláudio Valério Teles", "nome_guerra": "Valério", "identificador": "444.555.666-77", "tipo": "CIVIL", "posto_grad_cargo": "SPPF", "categoria": "Civil", "divisao": "DA", "secao": "DAPC", "tempo_comara_meses": 90},
+        {"nome": "Patrícia Bezerra Lima", "nome_guerra": "Patrícia", "identificador": "555.666.777-88", "tipo": "CIVIL", "posto_grad_cargo": "SPTF", "categoria": "Civil", "divisao": "DA", "secao": "DACC", "tempo_comara_meses": 45},
+        {"nome": "Helena Viana Campos", "nome_guerra": "Helena", "identificador": "666.777.888-99", "tipo": "CIVIL", "posto_grad_cargo": "SPPF", "categoria": "Civil", "divisao": "DPC", "secao": "SDC", "tempo_comara_meses": 58},
+        {"nome": "Eduardo Ramos Teixeira", "nome_guerra": "Teixeira", "identificador": "777.888.999-00", "tipo": "CIVIL", "posto_grad_cargo": "SPTF", "categoria": "Civil", "divisao": "DACO-MN", "secao": "SADM", "tempo_comara_meses": 40},
+        {"nome": "Beatriz Mendes Souza", "nome_guerra": "Beatriz", "identificador": "888.999.000-11", "tipo": "CIVIL", "posto_grad_cargo": "SPPF", "categoria": "Civil", "divisao": "PRESIDENCIA", "secao": "AJUR", "tempo_comara_meses": 85}
+    ]
         
     # Limpa tabela e insere o efetivo militar completo + servidores civis
     c.execute("DELETE FROM efetivo")

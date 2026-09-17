@@ -18,13 +18,13 @@
       <div style="text-align: center; margin-bottom: 1.25rem;">
         <img src="assets/brasao_comara.png" alt="Brasão COMARA" style="width: 70px; height: auto; margin-bottom: 0.5rem;">
         <h2 style="font-size: 1.25rem; color: var(--primary-navy); font-weight: 800; text-transform: uppercase;">Portal Eleitoral COMARA</h2>
-        <p style="font-size: 0.82rem; color: var(--text-secondary);">Prêmio "Padrão do Ano 2026" &bull; Autenticação de Rede LDAP</p>
+        <p style="font-size: 0.82rem; color: var(--text-secondary);">Prêmio "Padrão do Ano 2026" &bull; Autenticação de Rede LDAP (comara.intraer) ou SARAM/CPF</p>
       </div>
 
       <!-- Abas do Modal: Login vs Auto-Cadastro -->
       <div style="display: flex; border-bottom: 2px solid var(--border-color); margin-bottom: 1.25rem;">
         <button type="button" id="tab-btn-modal-login" class="btn" style="flex: 1; border-radius: 0; border-bottom: 3px solid var(--primary-blue); background: none; color: var(--primary-blue); font-weight: 700;">
-          <span>🔑</span> Entrar com LDAP
+          <span>🔑</span> Entrar com LDAP ou SARAM/CPF
         </button>
         <button type="button" id="tab-btn-modal-cadastro" class="btn" style="flex: 1; border-radius: 0; border-bottom: 3px solid transparent; background: none; color: var(--text-secondary); font-weight: 600;">
           <span>📝</span> Auto-Cadastro
@@ -36,18 +36,20 @@
         <div class="alert alert-info" style="font-size: 0.82rem; margin-bottom: 1rem;">
           <span>ℹ️</span>
           <div>
-            <strong>Acesso via Rede COMARA:</strong> Insira seu usuário de rede LDAP e senha. Seu acesso só estará liberado após a validação presencial na <strong>DPTI</strong>.
+            <strong>Acesso ao Sistema:</strong><br>
+            &bull; <strong>Votantes (Efetivo Cadastrado):</strong> Digite seu <strong>SARAM ou CPF</strong> para entrar diretamente e votar (senha dispensada antes da ativação DPTI).<br>
+            &bull; <strong>Chefias e Administrador (comara.intraer):</strong> Digite seu login de rede LDAP e senha (ativado presencialmente na DPTI).
           </div>
         </div>
 
         <form id="form-login-ldap">
           <div class="form-group">
-            <label class="form-label" for="login-ldap-user">Usuário de Rede (LDAP):</label>
-            <input type="text" id="login-ldap-user" class="form-control" placeholder="ex.: trigueiro.cmdt, moreira.cde, guedes.so..." required autofocus>
+            <label class="form-label" for="login-ldap-user">Usuário (SARAM, CPF ou Rede LDAP):</label>
+            <input type="text" id="login-ldap-user" class="form-control" placeholder="ex.: 6000097, 123.456.789-00 ou usuario@comara.intraer" required autofocus>
           </div>
           <div class="form-group">
-            <label class="form-label" for="login-ldap-pass">Senha:</label>
-            <input type="password" id="login-ldap-pass" class="form-control" placeholder="Senha da rede" required>
+            <label class="form-label" for="login-ldap-pass">Senha (Obrigatória para contas LDAP ativadas):</label>
+            <input type="password" id="login-ldap-pass" class="form-control" placeholder="Senha da rede ou deixe em branco se votar por SARAM/CPF">
           </div>
           <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
             <button type="button" class="btn btn-secondary" style="flex: 1;" id="btn-cancelar-modal-auth">
@@ -381,6 +383,23 @@
             </select>
             <button class="btn btn-secondary btn-sm" id="btn-atualizar-efetivo">Atualizar</button>
           </div>
+        </div>
+
+        <!-- Barra de Ações Administrativas do Efetivo (Exclusiva do Administrador) -->
+        <div id="admin-efetivo-toolbar" style="display: none; gap: 0.65rem; flex-wrap: wrap; margin-bottom: 1.25rem; padding: 0.85rem 1rem; background: var(--bg-alt, #f8fafc); border-radius: 8px; border: 1px dashed var(--border-color, #cbd5e1); align-items: center;">
+          <div style="font-weight: 700; font-size: 0.85rem; color: var(--primary-navy); width: 100%; margin-bottom: 0.25rem;">
+            ⚙️ Gestão de Efetivo do Ano Corrente (DPTI / Administrador):
+          </div>
+          <button type="button" class="btn btn-primary btn-sm" id="btn-upar-efetivo">
+            <span>📤</span> Upar Efetivo (.xlsx / .csv)
+          </button>
+          <input type="file" id="input-upload-efetivo" accept=".xlsx, .xls, .csv" style="display: none;">
+          <button type="button" class="btn btn-danger btn-sm" id="btn-limpar-efetivo">
+            <span>🗑️</span> Limpar Efetivo
+          </button>
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-restaurar-efetivo">
+            <span>🔄</span> Restaurar Efetivo Oficial (272)
+          </button>
         </div>
 
         <div class="table-responsive">

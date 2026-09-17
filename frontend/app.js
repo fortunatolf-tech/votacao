@@ -270,6 +270,11 @@ function aplicarUsuarioDeslogado() {
     ctrlBox.style.display = "none";
   }
 
+  const toolbarEfetivo = document.getElementById("admin-efetivo-toolbar");
+  if (toolbarEfetivo) {
+    toolbarEfetivo.style.display = "none";
+  }
+
   configurarPermissoesAbas("VISITANTE");
   carregarStatusFases();
 }
@@ -450,6 +455,12 @@ function aplicarUsuarioLogado(user) {
     ctrlBox.style.display = (user.papel === "ADMINISTRADOR" || user.papel === "CMDT_OM") ? "flex" : "none";
   }
 
+  // Barra de gestão do efetivo (Apenas Administrador)
+  const toolbarEfetivo = document.getElementById("admin-efetivo-toolbar");
+  if (toolbarEfetivo) {
+    toolbarEfetivo.style.display = (user.papel === "ADMINISTRADOR") ? "flex" : "none";
+  }
+
   // Preencher identificador na cabine de votação
   const inputSaramF4 = document.getElementById("fase4-input-saram");
   if (inputSaramF4 && user.identificador) {
@@ -485,6 +496,11 @@ function configurarPermissoesAbas(papel) {
   const podeVerQuorum = ["ADMINISTRADOR", "CMDT_OM", "CHEFE_DIVISAO"].includes(papel);
   if (btnQuorum) {
     btnQuorum.style.display = podeVerQuorum ? "inline-flex" : "none";
+  }
+
+  const toolbarEfetivo = document.getElementById("admin-efetivo-toolbar");
+  if (toolbarEfetivo) {
+    toolbarEfetivo.style.display = (papel === "ADMINISTRADOR") ? "flex" : "none";
   }
 
   if (papel === "ADMINISTRADOR") {
@@ -683,6 +699,25 @@ function initEventosDPTI() {
   if (filtroDiv) filtroDiv.addEventListener("change", carregarTabelaEfetivo);
   if (filtroCat) filtroCat.addEventListener("change", carregarTabelaEfetivo);
 
+  // Ações de Gestão do Efetivo (Administrador)
+  const btnUparEfetivo = document.getElementById("btn-upar-efetivo");
+  const inputUpload = document.getElementById("input-upload-efetivo");
+  const btnLimparEfetivo = document.getElementById("btn-limpar-efetivo");
+  const btnRestaurarEfetivo = document.getElementById("btn-restaurar-efetivo");
+
+  if (btnUparEfetivo && inputUpload) {
+    btnUparEfetivo.addEventListener("click", () => inputUpload.click());
+    inputUpload.addEventListener("change", handleUploadEfetivo);
+  }
+
+  if (btnLimparEfetivo) {
+    btnLimparEfetivo.addEventListener("click", handleLimparEfetivo);
+  }
+
+  if (btnRestaurarEfetivo) {
+    btnRestaurarEfetivo.addEventListener("click", handleRestaurarEfetivoPadrao);
+  }
+
   // Modal DPTI liberar
   const formModalLiberar = document.getElementById("form-dpti-liberar-modal");
   if (formModalLiberar) {
@@ -830,6 +865,109 @@ async function carregarTabelaEfetivo() {
     }).join("");
   } catch (err) {
     corpo.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--danger);">Falha: ${err.message}</td></tr>`;
+  }
+}
+
+async function handleLimparEfetivo() {
+  if (!confirm("ATENÇÃO: Deseja realmente LIMPAR todo o efetivo cadastrado para o ano corrente?\n\nEsta operação zerará a relação do efetivo e todas as indicações e votos registrados nas fases eleitorais.")) {
+    return;
+  }
+
+  const btn = document.getElementById("btn-limpar-efetivo");
+  if (btn) btn.disabled = true;
+
+  try {
+    const res = await fetch("/api/admin/efetivo/limpar", {
+      method: "POST"
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Falha ao limpar o efetivo.");
+
+    showToast("Efetivo Zerado", data.mensagem, "warning", 5000);
+    await carregarTabelaEfetivo();
+    if (typeof carregarPainelVotantes === "function") {
+      carregarPainelVotantes();
+    }
+  } catch (err) {
+    showToast("Erro ao Limpar Efetivo", err.message, "error", 6000);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function handleUploadEfetivo(e) {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+
+  const btn = document.getElementById("btn-upar-efetivo");
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = "<span>⏳</span> Importando...";
+  }
+
+  const formData = new FormData();
+  formData.append("arquivo", file);
+
+  showToast("Processando Planilha", `Enviando "${file.name}" para atualização do efetivo...`, "info", 3500);
+
+  try {
+    const res = await fetch("/api/admin/efetivo/upload", {
+      method: "POST",
+      body: formData
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Erro ao importar efetivo.");
+
+    let resumo = "";
+    if (data.por_categoria) {
+      resumo = ` (${data.por_categoria.Graduados} Graduados, ${data.por_categoria.Pracas} Praças, ${data.por_categoria.Civil} Civis)`;
+    }
+    showToast("Efetivo Atualizado!", `${data.mensagem}${resumo}`, "success", 6000);
+    await carregarTabelaEfetivo();
+    if (typeof carregarPainelVotantes === "function") {
+      carregarPainelVotantes();
+    }
+  } catch (err) {
+    showToast("Falha na Importação", err.message, "error", 6500);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = "<span>📤</span> Upar Efetivo (.xlsx / .csv)";
+    }
+    e.target.value = "";
+  }
+}
+
+async function handleRestaurarEfetivoPadrao() {
+  if (!confirm("Deseja restaurar o efetivo oficial padrão da COMARA (272 integrantes: 264 militares e 8 civis)?")) {
+    return;
+  }
+
+  const btn = document.getElementById("btn-restaurar-efetivo");
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = "<span>⏳</span> Restaurando...";
+  }
+
+  try {
+    const res = await fetch("/api/admin/efetivo/restaurar-padrao", {
+      method: "POST"
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Erro ao restaurar efetivo padrão.");
+
+    showToast("Efetivo Padrão Restaurado", data.mensagem, "success", 5000);
+    await carregarTabelaEfetivo();
+    if (typeof carregarPainelVotantes === "function") {
+      carregarPainelVotantes();
+    }
+  } catch (err) {
+    showToast("Erro na Restauração", err.message, "error", 6000);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = "<span>🔄</span> Restaurar Efetivo Oficial (272)";
+    }
   }
 }
 
