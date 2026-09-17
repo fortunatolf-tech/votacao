@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Padrão do Ano - COMARA | Sistema Oficial de Seleção e Votação</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- RECIPIENTE DE NOTIFICAÇÕES VISUAIS (TOASTS) -->
+  <div id="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- MODAL DE LOGIN / AUTO-CADASTRO -->
+  <div id="modal-auth" class="modal-backdrop" style="display: none;">
+    <div class="login-card">
+      <div style="text-align: center; margin-bottom: 1.25rem;">
+        <img src="assets/brasao_comara.png" alt="Brasão COMARA" style="width: 70px; height: auto; margin-bottom: 0.5rem;">
+        <h2 style="font-size: 1.25rem; color: var(--primary-navy); font-weight: 800; text-transform: uppercase;">Portal Eleitoral COMARA</h2>
+        <p style="font-size: 0.82rem; color: var(--text-secondary);">Prêmio "Padrão do Ano 2026" &bull; Autenticação de Rede LDAP</p>
+      </div>
+
+      <!-- Abas do Modal: Login vs Auto-Cadastro -->
+      <div style="display: flex; border-bottom: 2px solid var(--border-color); margin-bottom: 1.25rem;">
+        <button type="button" id="tab-btn-modal-login" class="btn" style="flex: 1; border-radius: 0; border-bottom: 3px solid var(--primary-blue); background: none; color: var(--primary-blue); font-weight: 700;">
+          <span>🔑</span> Entrar com LDAP
+        </button>
+        <button type="button" id="tab-btn-modal-cadastro" class="btn" style="flex: 1; border-radius: 0; border-bottom: 3px solid transparent; background: none; color: var(--text-secondary); font-weight: 600;">
+          <span>📝</span> Auto-Cadastro
+        </button>
+      </div>
+
+      <!-- Formulário 1: Login LDAP -->
+      <div id="modal-pane-login">
+        <div class="alert alert-info" style="font-size: 0.82rem; margin-bottom: 1rem;">
+          <span>ℹ️</span>
+          <div>
+            <strong>Acesso via Rede COMARA:</strong> Insira seu usuário de rede LDAP e senha. Seu acesso só estará liberado após a validação presencial na <strong>DPTI</strong>.
+          </div>
+        </div>
+
+        <form id="form-login-ldap">
+          <div class="form-group">
+            <label class="form-label" for="login-ldap-user">Usuário de Rede (LDAP):</label>
+            <input type="text" id="login-ldap-user" class="form-control" placeholder="ex.: lima.eleitor, moreira.cde..." required autofocus>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="login-ldap-pass">Senha:</label>
+            <input type="password" id="login-ldap-pass" class="form-control" placeholder="Senha da rede" required>
+          </div>
+          <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;" id="btn-submit-ldap">
+            <span>🔑</span> Entrar no Sistema
+          </button>
+          <div id="login-ldap-feedback" style="margin-top: 0.75rem;"></div>
+        </form>
+
+        <!-- Seletor Rápido dos 5 Modificadores de Acesso -->
+        <div style="margin-top: 1.25rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+          <div style="font-size: 0.78rem; font-weight: 700; color: var(--primary-navy); margin-bottom: 0.5rem; text-transform: uppercase;">
+            Demonstração Rápida de Perfis (5 Modificadores de Acesso):
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem;">
+            <button type="button" class="quick-user-btn" onclick="preencherLoginDemo('admin.dpti', 'comara')">
+              <span>🛡️ <strong>Administrador</strong></span>
+              <small style="color: #dc2626;">DPTI</small>
+            </button>
+            <button type="button" class="quick-user-btn" onclick="preencherLoginDemo('mendes.cmdt', 'comara')">
+              <span>👑 <strong>Presidente OM</strong></span>
+              <small style="color: #d4af37;">Comando</small>
+            </button>
+            <button type="button" class="quick-user-btn" onclick="preencherLoginDemo('moreira.cde', 'comara')">
+              <span>⭐ <strong>Chefe Divisão</strong></span>
+              <small style="color: #0284c7;">DE</small>
+            </button>
+            <button type="button" class="quick-user-btn" onclick="preencherLoginDemo('secao.depl', 'comara')">
+              <span>🎖️ <strong>Chefe Seção</strong></span>
+              <small style="color: #059669;">DEPL</small>
+            </button>
+            <button type="button" class="quick-user-btn" onclick="preencherLoginDemo('lima.eleitor', 'comara')">
+              <span>🗳️ <strong>Usuário Comum</strong></span>
+              <small style="color: #475569;">Eleitor</small>
+            </button>
+            <button type="button" class="quick-user-btn" onclick="preencherLoginDemo('novo.usuario', 'comara')" style="border-color: #fca5a5;">
+              <span>⚠️ <strong>Pendente DPTI</strong></span>
+              <small style="color: #dc2626;">Bloqueio</small>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Formulário 2: Auto-Cadastro de Efetivo -->
+      <div id="modal-pane-cadastro" style="display: none;">
+        <div class="alert alert-warning" style="font-size: 0.82rem; margin-bottom: 1rem;">
+          <span>⚠️</span>
+          <div>
+            <strong>Aviso de Liberação:</strong> Ao concluir este cadastro, sua conta será criada como <em>Usuário Comum (Pendente)</em>. Você deverá comparecer presencialmente à <strong>DPTI</strong> para que o Administrador vincule seu LDAP e libere seu acesso.
+          </div>
+        </div>
+
+        <form id="form-auto-cadastro">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+            <div class="form-group">
+              <label class="form-label" for="cad-nome-completo">Nome Completo</label>
+              <input type="text" id="cad-nome-completo" class="form-control" required placeholder="Ex.: Lucas Moreira">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="cad-nome-guerra">Nome de Guerra</label>
+              <input type="text" id="cad-nome-guerra" class="form-control" required placeholder="Ex.: Moreira">
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+            <div class="form-group">
+              <label class="form-label" for="cad-identificador">Identificador (SARAM ou CPF)</label>
+              <input type="text" id="cad-identificador" class="form-control" required placeholder="SARAM militar ou CPF civil">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="cad-tipo">Tipo</label>
+              <select id="cad-tipo" class="form-control" required>
+                <option value="MILITAR">Militar</option>
+                <option value="CIVIL">Servidor Civil</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+            <div class="form-group">
+              <label class="form-label" for="cad-posto">Posto / Grad / Cargo</label>
+              <input type="text" id="cad-posto" class="form-control" required placeholder="Ex.: 2S, CB, SPTF">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="cad-categoria">Classe Concorrente</label>
+              <select id="cad-categoria" class="form-control" required>
+                <option value="Graduados">Graduado Padrão (SO/SGT)</option>
+                <option value="Pracas">Praça Padrão (SD/CB)</option>
+                <option value="Civil">Civil Padrão (SPPF/SPTF)</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+            <div class="form-group">
+              <label class="form-label" for="cad-divisao">Divisão de Lotação</label>
+              <select id="cad-divisao" class="form-control" required>
+                <option value="DE">DE - Engenharia</option>
+                <option value="DL">DL - Logística</option>
+                <option value="DA">DA - Apoio</option>
+                <option value="DPC">DPC - Planejamento</option>
+                <option value="DACO-MN">DACO-MN - Manaus</option>
+                <option value="VP">VP - Vice-Presidência</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="cad-secao">Seção / Subdivisão</label>
+              <input type="text" id="cad-secao" class="form-control" required placeholder="Ex.: DEPL, DAPC, DLTR...">
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+            <div class="form-group">
+              <label class="form-label" for="cad-ldap-username">Login de Rede (LDAP)</label>
+              <input type="text" id="cad-ldap-username" class="form-control" required placeholder="ex.: moreira.sd">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="cad-senha">Senha</label>
+              <input type="password" id="cad-senha" class="form-control" required placeholder="Defina sua senha">
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;">
+            <span>💾</span> Realizar Auto-Cadastro
+          </button>
+          <div id="auto-cadastro-feedback" style="margin-top: 0.75rem;"></div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE LIBERAÇÃO PRESENCIAL NA DPTI (ADMINISTRADOR) -->
+  <div id="modal-dpti-liberar" class="modal-backdrop" style="display: none;">
+    <div class="login-card" style="max-width: 520px;">
+      <div style="text-align: center; margin-bottom: 1.25rem;">
+        <span style="font-size: 2.5rem;">🛡️</span>
+        <h2 style="font-size: 1.2rem; color: var(--primary-navy); font-weight: 800; text-transform: uppercase;">DPTI &bull; Liberação e Vínculo de Rede</h2>
+        <p style="font-size: 0.82rem; color: var(--text-secondary);">Ativação de conta e atribuição de papel institucional</p>
+      </div>
+
+      <form id="form-dpti-liberar-modal">
+        <input type="hidden" id="dpti-modal-usuario-id">
+        
+        <div style="background: #f8fafc; border: 1px solid var(--border-color); border-radius: var(--radius); padding: 0.8rem; margin-bottom: 1rem; font-size: 0.85rem;">
+          <div><strong>Requerente:</strong> <span id="dpti-modal-nome">--</span></div>
+          <div><strong>Identificador:</strong> <span id="dpti-modal-identificador">--</span></div>
+          <div><strong>Status Atual:</strong> <span id="dpti-modal-status-badge" class="badge badge-warning">PENDENTE_DPTI</span></div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="dpti-modal-ldap">Login de Rede (LDAP):</label>
+          <input type="text" id="dpti-modal-ldap" class="form-control" required placeholder="ex.: silva.eleitor">
+          <small style="color: var(--text-muted); font-size: 0.75rem;">Conta de rede vinculada pelo administrador da DPTI</small>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="dpti-modal-papel">Modificador de Acesso Definitivo:</label>
+          <select id="dpti-modal-papel" class="form-control" required>
+            <option value="USUARIO_COMUM">Usuário Comum (Eleitor Geral)</option>
+            <option value="CHEFE_SECAO">Chefe de Seção (Indica 1 por classe na Fase 1)</option>
+            <option value="CHEFE_DIVISAO">Chefe de Divisão (Seleciona 2 na Fase 2 e Veto na Fase 3)</option>
+            <option value="CMDT_OM">Presidente da COMARA / Comandante da OM (Decisão Fase 5)</option>
+            <option value="ADMINISTRADOR">Administrador do Sistema (DPTI)</option>
+          </select>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+          <div class="form-group">
+            <label class="form-label" for="dpti-modal-divisao">Divisão de Lotação:</label>
+            <select id="dpti-modal-divisao" class="form-control" required>
+              <option value="DE">DE - Engenharia</option>
+              <option value="DL">DL - Logística</option>
+              <option value="DA">DA - Apoio</option>
+              <option value="DPC">DPC - Planejamento</option>
+              <option value="DACO-MN">DACO-MN - Manaus</option>
+              <option value="VP">VP - Vice-Presidência</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="dpti-modal-secao">Seção / Subdivisão:</label>
+            <input type="text" id="dpti-modal-secao" class="form-control" required placeholder="Ex.: DEPL, DAPC...">
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+          <button type="button" class="btn btn-secondary" style="flex: 1;" onclick="fecharModalDptiLiberar()">Cancelar</button>
+          <button type="submit" class="btn btn-primary" style="flex: 1;" id="btn-dpti-modal-confirmar">
+            <span>✅</span> Ativar & Liberar Acesso
+          </button>
+        </div>
+        <div id="dpti-modal-feedback" style="margin-top: 0.75rem;"></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Cabeçalho Oficial Militar -->
+  <header class="military-header">
+    <div class="header-container">
+      <div class="header-brand">
+        <img src="assets/brasao_comara.png" alt="Brasão da COMARA" class="header-logo-img">
+        <div class="header-title">
+          <h1>Comissão de Aeroportos da Região Amazônica - COMARA</h1>
+          <p>Sistema Oficial de Seleção e Votação &bull; Prêmio "Padrão do Ano 2026"</p>
+        </div>
+      </div>
+
+      <!-- Barra do Usuário Autenticado -->
+      <div class="header-user-bar" id="header-user-container">
+        <div id="user-info-display" style="display: flex; align-items: center; gap: 0.6rem;">
+          <span id="user-role-badge" class="user-badge-role role-admin">ADMINISTRADOR</span>
+          <span id="user-name-display" style="font-size: 0.88rem; font-weight: 600;">Carregando...</span>
+          <span id="user-unit-display" style="font-size: 0.78rem; color: #cbd5e1;">(DPTI)</span>
+        </div>
+        <button type="button" class="btn btn-gold btn-sm" popovertarget="popover-guia-geral" style="padding: 0.25rem 0.65rem; font-size: 0.75rem;">
+          <span>❓</span> Guia do Sistema
+        </button>
+        <button class="btn btn-secondary btn-sm" id="btn-trocar-usuario" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;">
+          Trocar Usuário
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Barra de Acompanhamento das 5 Fases Eleitorais -->
+  <div class="fases-progress-bar">
+    <div class="fases-container">
+      <div class="fases-stepper">
+        <div class="fase-step-item active" id="badge-fase-1">
+          <span>1️⃣</span> Fase 1: Chefes de Seção (Indicar 1)
+        </div>
+        <div class="fase-step-item" id="badge-fase-2">
+          <span>2️⃣</span> Fase 2: Chefes de Divisão (Selecionar 2)
+        </div>
+        <div class="fase-step-item" id="badge-fase-3">
+          <span>3️⃣</span> Fase 3: Rodada de Veto
+        </div>
+        <div class="fase-step-item" id="badge-fase-4">
+          <span>4️⃣</span> Fase 4: Votação Geral (Clique)
+        </div>
+        <div class="fase-step-item" id="badge-fase-5">
+          <span>5️⃣</span> Fase 5: Decisão do Presidente da OM
+        </div>
+      </div>
+
+      <!-- Painel de Controle de Fases (Admin / Comandante) -->
+      <div id="controle-fase-admin-box" style="display: flex; align-items: center; gap: 0.5rem;">
+        <select id="select-avancar-fase" class="form-control" style="font-size: 0.8rem; padding: 0.3rem 0.6rem; width: auto;">
+          <option value="FASE_1_SECAO">Fase 1: Seções</option>
+          <option value="FASE_2_DIVISAO">Fase 2: Divisões</option>
+          <option value="FASE_3_VETO">Fase 3: Veto</option>
+          <option value="FASE_4_VOTACAO_GERAL">Fase 4: Votação Geral</option>
+          <option value="FASE_5_COMANDANTE">Fase 5: Decisão Presidente</option>
+          <option value="FINALIZADO">Processo Finalizado</option>
+        </select>
+        <button class="btn btn-gold btn-sm" id="btn-avancar-fase">Mudar Fase</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Barra de Navegação em Abas -->
+  <nav class="main-nav" aria-label="Navegação do Sistema">
+    <div class="nav-container">
+      <button class="nav-tab-btn active" data-tab="tab-dpti" id="nav-btn-dpti">
+        <span>🏢</span> 1. Fila DPTI & Efetivo
+      </button>
+      <button class="nav-tab-btn" data-tab="tab-fase1" id="nav-btn-fase1">
+        <span>🎖️</span> 2. Fase 1: Indicação por Seção
+      </button>
+      <button class="nav-tab-btn" data-tab="tab-fase2" id="nav-btn-fase2">
+        <span>⭐</span> 3. Fase 2: Seleção por Divisão
+      </button>
+      <button class="nav-tab-btn" data-tab="tab-fase3" id="nav-btn-fase3">
+        <span>⚖️</span> 4. Fase 3: Rodada de Veto
+      </button>
+      <button class="nav-tab-btn" data-tab="tab-fase4" id="nav-btn-fase4">
+        <span>🗳️</span> 5. Fase 4: Votação Geral por Clique
+      </button>
+      <button class="nav-tab-btn" data-tab="tab-fase5" id="nav-btn-fase5">
+        <span>👑</span> 6. Fase 5: Decisão da Presidência
+      </button>
+      <button class="nav-tab-btn" data-tab="tab-auditoria" id="nav-btn-auditoria">
+        <span>🔒</span> 7. Auditoria & Testes
+      </button>
+    </div>
+  </nav>
+
+  <!-- Área de Conteúdo Principal -->
+  <main class="app-main">
+
+    <!-- ABA 1: FILA DPTI & EFETIVO GERAL -->
+    <section id="tab-dpti" class="tab-pane active">
+      <!-- Fila de Liberação DPTI (Exclusiva do Administrador) -->
+      <div class="card" id="card-fila-dpti">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">🏢 Fila de Liberação Presencial na DPTI</h2>
+            <p class="card-subtitle">O militar ou civil comparece à DPTI; o Administrador vincula o login LDAP e atribui o modificador de acesso definitivo</p>
+          </div>
+          <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+            <button type="button" class="btn-help-inline" popovertarget="popover-dpti-papeis">
+              <span>❓</span> Papéis de Acesso & DPTI
+            </button>
+            <button class="btn btn-secondary btn-sm" id="btn-atualizar-fila-dpti">Atualizar Fila</button>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Nome Completo</th>
+                <th>Identificador</th>
+                <th>Login LDAP</th>
+                <th>Lotação Informada</th>
+                <th>Status Atual</th>
+                <th style="text-align: center;">Ação do Administrador (DPTI)</th>
+              </tr>
+            </thead>
+            <tbody id="tabela-fila-dpti-corpo">
+              <tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Consultando cadastros na DPTI...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Relação Geral do Efetivo da COMARA -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">👥 Relação Geral do Efetivo COMARA (RICA 21-209)</h2>
+            <p class="card-subtitle">Militares e servidores civis distribuídos nas classes: Graduado Padrão, Praça Padrão e Civil Padrão</p>
+          </div>
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <select id="filtro-tabela-divisao" class="form-control" style="width: auto;">
+              <option value="">Todas as Divisões</option>
+              <option value="DE">DE - Engenharia</option>
+              <option value="DL">DL - Logística</option>
+              <option value="DA">DA - Apoio</option>
+              <option value="DPC">DPC - Planejamento</option>
+              <option value="DACO-MN">DACO-MN - Manaus</option>
+              <option value="VP">VP - Vice-Presidência</option>
+            </select>
+            <select id="filtro-tabela-categoria" class="form-control" style="width: auto;">
+              <option value="">Todas as Classes</option>
+              <option value="Graduados">Graduados (SO/SGT)</option>
+              <option value="Pracas">Praças (SD/CB)</option>
+              <option value="Civil">Civis (SPPF/SPTF)</option>
+            </select>
+            <button class="btn btn-secondary btn-sm" id="btn-atualizar-efetivo">Atualizar</button>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Posto/Grad/Cargo</th>
+                <th>Nome de Guerra</th>
+                <th>SARAM / CPF</th>
+                <th>Classe do Concurso</th>
+                <th>Divisão</th>
+                <th>Seção</th>
+                <th>Tempo COMARA</th>
+              </tr>
+            </thead>
+            <tbody id="tabela-efetivo-corpo">
+              <tr><td colspan="7" style="text-align: center; color: var(--text-muted);">Carregando efetivo...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ABA 2: FASE 1 - INDICAÇÃO PELO CHEFE DE SEÇÃO -->
+    <section id="tab-fase1" class="tab-pane">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">🎖️ Fase 1: Indicação pelos Chefes de Seção</h2>
+            <p class="card-subtitle">Cada Chefe de Seção indica <strong>1 militar/servidor subordinado a ele</strong> por classe</p>
+          </div>
+          <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+            <button type="button" class="btn-help-inline" popovertarget="popover-fase1">
+              <span>❓</span> Regras da Fase 1
+            </button>
+            <span class="badge badge-civil" id="fase1-secao-badge">Minha Seção: DEPL</span>
+          </div>
+        </div>
+
+        <div class="alert alert-info">
+          <span>ℹ️</span>
+          <div>
+            <strong>Regra da Fase 1:</strong> Você deve indicar 1 subordinado direto da sua seção para concorrer em cada uma das classes disponíveis (Graduado Padrão, Praça Padrão e Civil Padrão).
+          </div>
+        </div>
+
+        <div id="container-fase1-classes">
+          <!-- Renderizado dinamicamente via JS -->
+        </div>
+      </div>
+    </section>
+
+    <!-- ABA 3: FASE 2 - SELEÇÃO PELO CHEFE DE DIVISÃO -->
+    <section id="tab-fase2" class="tab-pane">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">⭐ Fase 2: Seleção pelos Chefes de Divisão</h2>
+            <p class="card-subtitle">O Chefe de Divisão visualiza os indicados pelas seções subordinadas e indica <strong>2 candidatos por classe</strong></p>
+          </div>
+          <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+            <button type="button" class="btn-help-inline" popovertarget="popover-fase2">
+              <span>❓</span> Regras da Fase 2
+            </button>
+            <span class="badge badge-civil" id="fase2-divisao-badge">Minha Divisão: DE</span>
+          </div>
+        </div>
+
+        <div class="alert alert-info">
+          <span>ℹ️</span>
+          <div>
+            <strong>Regra da Fase 2:</strong> Analise os candidatos indicados pelas seções subordinadas à sua divisão e selecione <strong>até 2 representantes por classe</strong> para irem à deliberação geral de veto.
+          </div>
+        </div>
+
+        <div id="container-fase2-classes">
+          <!-- Renderizado dinamicamente via JS -->
+        </div>
+      </div>
+    </section>
+
+    <!-- ABA 4: FASE 3 - RODADA DE VETO PELOS CHEFES DE DIVISÃO -->
+    <section id="tab-fase3" class="tab-pane">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">⚖️ Fase 3: Rodada de Veto das Chefias de Divisão</h2>
+            <p class="card-subtitle">Todos os Chefes de Divisão deliberam em bloco: votam se <strong>VETAM</strong> ou <strong>NÃO VETAM</strong> cada candidato indicado</p>
+          </div>
+          <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+            <button type="button" class="btn-help-inline" popovertarget="popover-fase3">
+              <span>❓</span> Regras da Fase 3
+            </button>
+            <span class="badge badge-graduados">Votação de Veto</span>
+          </div>
+        </div>
+
+        <div class="alert alert-info">
+          <span>ℹ️</span>
+          <div>
+            <strong>Critério de Aprovação:</strong> O candidato que não receber a maioria de vetos é considerado <strong>Aprovado para a Votação Geral</strong>.
+          </div>
+        </div>
+
+        <div id="container-fase3-vetos">
+          <!-- Renderizado dinamicamente via JS -->
+        </div>
+      </div>
+    </section>
+
+    <!-- ABA 5: FASE 4 - CABINE DE VOTAÇÃO GERAL (VOTO POR CLIQUE) -->
+    <section id="tab-fase4" class="tab-pane">
+      <div class="card" style="max-width: 980px; margin: 0 auto;">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">🗳️ Fase 4: Votação Geral por Todo o Efetivo</h2>
+            <p class="card-subtitle">Todo o efetivo vota em apenas 1 candidato de cada classe &bull; <strong>Escolha feita apenas pelo clique direto (sem notas)</strong></p>
+          </div>
+          <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+            <button type="button" class="btn-help-inline" popovertarget="popover-fase4">
+              <span>❓</span> Como Funciona a Votação?
+            </button>
+            <span class="badge badge-homologado">Votação Popular Direta</span>
+          </div>
+        </div>
+
+        <!-- Banner Explicativo caso a fase ativa não seja a Fase 4 -->
+        <div id="fase4-alerta-fase-inativa" class="alert alert-warning" style="display: none; margin-bottom: 1rem;">
+          <span>ℹ️</span>
+          <div>
+            <strong>Status do Calendário Eleitoral:</strong> O processo eleitoral está atualmente na fase <strong id="fase4-nome-fase-atual">--</strong>. A apuração geral dos votos de todo o efetivo será computada oficialmente quando a comissão avançar para a <strong>Fase 4</strong>. Você pode simular suas escolhas diretamente abaixo.
+          </div>
+        </div>
+
+        <!-- Painel Superior do Eleitor e Progresso da Escolha (Abre DIRETO na Cédula!) -->
+        <div class="vote-tracker-card" id="fase4-top-voter-card">
+          <div>
+            <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.85;">Eleitor Ativo na Cabine</div>
+            <div style="font-size: 1.15rem; font-weight: 800;">
+              <span id="fase4-eleitor-nome">Identificando eleitor...</span>
+              <span id="fase4-eleitor-divisao" class="badge badge-civil" style="margin-left: 0.5rem; font-size: 0.75rem;">--</span>
+            </div>
+            <div style="font-size: 0.78rem; opacity: 0.9; margin-top: 0.2rem;">
+              SARAM / CPF: <code id="fase4-eleitor-identificador" style="color: #fef08a;">--</code> &bull; 
+              <a href="javascript:void(0)" onclick="toggleTrocarEleitorFase4()" style="color: #93c5fd; text-decoration: underline; font-weight: 600;">Trocar Eleitor (SARAM/CPF)</a>
+            </div>
+          </div>
+          <div>
+            <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.85; margin-bottom: 0.3rem;">Progresso do Voto (3 Classes Obrigatórias):</div>
+            <div class="vote-tracker-pills">
+              <span class="vote-tracker-pill pending" id="pill-status-graduados">Graduados: ⚪ Pendente</span>
+              <span class="vote-tracker-pill pending" id="pill-status-pracas">Praças: ⚪ Pendente</span>
+              <span class="vote-tracker-pill pending" id="pill-status-civil">Civil: ⚪ Pendente</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Box Colapsável para Trocar Eleitor em Terminal Compartilhado -->
+        <div id="fase4-box-trocar-eleitor" style="display: none; background: #ffffff; border: 1px solid var(--border-color); border-radius: var(--radius); padding: 1rem; margin-bottom: 1.5rem; box-shadow: var(--shadow-sm);">
+          <form id="form-fase4-auth-inline" style="display: flex; gap: 0.5rem; align-items: flex-end; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 240px;">
+              <label class="form-label" style="font-size: 0.8rem;" for="fase4-input-saram">SARAM do Militar ou CPF do Servidor Civil:</label>
+              <input type="text" id="fase4-input-saram" class="form-control" placeholder="Digite o SARAM ou CPF do novo votante" required>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm">Confirmar Eleitor</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="toggleTrocarEleitorFase4()">Cancelar</button>
+          </form>
+          <div id="fase4-auth-feedback" style="margin-top: 0.5rem;"></div>
+        </div>
+
+        <!-- Cédula Digital de Voto por Clique (DIRETA SEM ETAPA INTERMEDIÁRIA) -->
+        <div id="fase4-box-cedula">
+          <form id="form-fase4-votar">
+            <!-- Graduados -->
+            <div class="card" id="categoria-box-Graduados" style="border-left: 4px solid var(--accent-gold); margin-bottom: 1.5rem;">
+              <div class="card-header">
+                <div>
+                  <h3 class="card-title" style="font-size: 1.05rem;">
+                    <span>⭐</span> Graduado Padrão da COMARA (SO / SGT)
+                  </h3>
+                  <p class="card-subtitle">Clique diretamente no cartão do seu candidato</p>
+                </div>
+                <span class="badge badge-graduados" id="badge-escolha-graduados">⚪ Pendente de Escolha</span>
+              </div>
+              <div class="grid-3" id="cedula-fase4-graduados">
+                <p style="color: var(--text-muted); font-size: 0.85rem; grid-column: 1 / -1;">Carregando candidatos homologados...</p>
+              </div>
+            </div>
+
+            <!-- Praças -->
+            <div class="card" id="categoria-box-Pracas" style="border-left: 4px solid #10b981; margin-bottom: 1.5rem;">
+              <div class="card-header">
+                <div>
+                  <h3 class="card-title" style="font-size: 1.05rem;">
+                    <span>🎖️</span> Praça Padrão da COMARA (SD / CB)
+                  </h3>
+                  <p class="card-subtitle">Clique diretamente no cartão do seu candidato</p>
+                </div>
+                <span class="badge badge-pracas" id="badge-escolha-pracas">⚪ Pendente de Escolha</span>
+              </div>
+              <div class="grid-3" id="cedula-fase4-pracas">
+                <p style="color: var(--text-muted); font-size: 0.85rem; grid-column: 1 / -1;">Carregando candidatos homologados...</p>
+              </div>
+            </div>
+
+            <!-- Civil -->
+            <div class="card" id="categoria-box-Civil" style="border-left: 4px solid #6366f1; margin-bottom: 1.5rem;">
+              <div class="card-header">
+                <div>
+                  <h3 class="card-title" style="font-size: 1.05rem;">
+                    <span>🏛️</span> Civil Padrão da COMARA (SPPF / SPTF)
+                  </h3>
+                  <p class="card-subtitle">Clique diretamente no cartão do seu candidato</p>
+                </div>
+                <span class="badge badge-civil" id="badge-escolha-civil">⚪ Pendente de Escolha</span>
+              </div>
+              <div class="grid-3" id="cedula-fase4-civil">
+                <p style="color: var(--text-muted); font-size: 0.85rem; grid-column: 1 / -1;">Carregando candidatos homologados...</p>
+              </div>
+            </div>
+
+            <div style="text-align: center; margin-top: 2rem;">
+              <button type="submit" class="btn btn-gold" id="btn-gravar-voto" style="font-size: 1.1rem; padding: 0.9rem 2.5rem;">
+                <span>🔒</span> Gravar Voto Definitivo
+              </button>
+              <div id="fase4-voto-aviso-falha" style="margin-top: 0.75rem; font-size: 0.88rem;"></div>
+            </div>
+          </form>
+        </div>
+
+        <!-- Comprovante de Voto -->
+        <div id="fase4-box-comprovante" style="display: none; text-align: center; padding: 2rem 1rem;">
+          <div style="font-size: 3.5rem; color: var(--success); margin-bottom: 1rem;">✅</div>
+          <h3 style="color: var(--primary-navy); font-size: 1.4rem;">Voto Gravado com Sucesso!</h3>
+          <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Sua escolha foi computada com sigilo inviolável e anonimização criptográfica SHA-256.</p>
+          <div style="background: #f8fafc; border: 1px dashed var(--border-color); padding: 1.25rem; max-width: 450px; margin: 0 auto 2rem auto; border-radius: var(--radius);">
+            <div style="font-size: 0.78rem; color: var(--text-muted);">Comprovante de Autenticação Digital</div>
+            <div id="fase4-comprovante-hash" style="font-size: 1.25rem; font-weight: 800; color: var(--primary-navy); letter-spacing: 2px;">--</div>
+            <div id="fase4-comprovante-data" style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.3rem;">--</div>
+          </div>
+          <button class="btn btn-primary" id="btn-fase4-proximo-eleitor">Próximo Eleitor</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ABA 6: FASE 5 - DECISÃO DO PRESIDENTE DA COMARA -->
+    <section id="tab-fase5" class="tab-pane">
+      <div class="card" style="border-top: 5px solid var(--accent-gold);">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">👑 Fase 5: Apreciação e Decisão do Presidente da COMARA</h2>
+            <p class="card-subtitle">O Comandante da OM avalia os mais votados. Pode ser <strong>A Favor (Homologar)</strong> ou, se for <strong>Contra, indicar diretamente o ganhador</strong>.</p>
+          </div>
+          <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+            <button type="button" class="btn-help-inline" popovertarget="popover-fase5">
+              <span>❓</span> Prerrogativas do Comandante
+            </button>
+            <div id="fase5-status-geral-badge">
+              <span class="badge badge-warning">Aguardando Deliberação da Presidência</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="alert alert-info">
+          <span>⚖️</span>
+          <div>
+            <strong>Prerrogativa Regulamentar do Presidente da COMARA:</strong> O Comandante tem autoridade plena para acolher o resultado popular dos mais votados ou, caso entenda necessário em razão do mérito institucional, indicar diretamente quem deve ser o ganhador do título "Padrão do Ano".
+          </div>
+        </div>
+
+        <div id="container-fase5-decisoes">
+          <!-- Renderizado dinamicamente via JS com painel para cada uma das 3 classes -->
+        </div>
+      </div>
+    </section>
+
+    <!-- ABA 7: AUDITORIA & TESTES -->
+    <section id="tab-auditoria" class="tab-pane">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">🧪 Validação Algorítmica e Testes</h2>
+              <p class="card-subtitle">Execução da suíte de testes do novo fluxo em 5 fases</p>
+            </div>
+            <button class="btn btn-primary btn-sm" id="btn-executar-testes">
+              <span>▶️</span> Executar Suíte de Testes
+            </button>
+          </div>
+          <div id="resultado-testes-container">
+            <div class="alert alert-info">Clique no botão para rodar os testes automatizados.</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">📋 Resumo das 5 Fases Oficiais</h2>
+          </div>
+          <div style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6;">
+            <p><strong>DPTI:</strong> Auto-cadastro seguido de liberação presencial e vínculo LDAP.</p>
+            <p><strong>Fase 1:</strong> Chefe de Seção indica 1 militar subordinado por classe.</p>
+            <p><strong>Fase 2:</strong> Chefe de Divisão seleciona até 2 indicados das suas seções.</p>
+            <p><strong>Fase 3:</strong> Chefes de Divisão deliberam votando Veto / Não Veto.</p>
+            <p><strong>Fase 4:</strong> Votação por clique de todo o efetivo (sem notas!).</p>
+            <p><strong>Fase 5:</strong> Presidente da COMARA homologa ou indica o ganhador direto.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Trilha de Auditoria -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">🔒 Trilha de Auditoria Criptográfica SHA-256</h2>
+            <p class="card-subtitle">Registro cronológico imutável de todas as ações das 5 fases</p>
+          </div>
+          <button class="btn btn-secondary btn-sm" id="btn-atualizar-logs">Atualizar Logs</button>
+        </div>
+
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Data/Hora</th>
+                <th>Evento</th>
+                <th>Usuário</th>
+                <th>Divisão</th>
+                <th>Detalhes</th>
+                <th>Hash SHA-256</th>
+              </tr>
+            </thead>
+            <tbody id="tabela-logs-corpo">
+              <tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Carregando logs...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================
+         POPOVERS EXPLICATIVOS NATIVOS (HTML5)
+         ========================================== -->
+
+    <!-- POPOVER 1: GUIA GERAL DO SISTEMA -->
+    <div id="popover-guia-geral" popover>
+      <div class="popover-box">
+        <div class="popover-header">
+          <div class="popover-title">
+            <span>🏛️</span> Guia Geral do Concurso "Padrão do Ano"
+          </div>
+          <button type="button" class="popover-close-btn" popovertarget="popover-guia-geral" popovertargetaction="hide">&times;</button>
+        </div>
+        <div class="popover-body">
+          <p>O prêmio <strong>"Padrão do Ano"</strong> da COMARA segue o regulamento oficial (RICA 21-209), com avaliação e escolha segregada em três classes independentes:</p>
+          <ul>
+            <li><strong>Graduados:</strong> Sargentos (3S, 2S, 1S) e Suboficiais (SO).</li>
+            <li><strong>Praças:</strong> Soldados (S1, S2) e Cabos (CB).</li>
+            <li><strong>Civil:</strong> Servidores Públicos Civis (SPPF e SPTF).</li>
+          </ul>
+          <div style="background: #f8fafc; padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); margin-top: 0.75rem;">
+            <strong>Fluxo em 5 Fases Sequenciais:</strong>
+            <ol style="margin-left: 1.25rem; margin-top: 0.35rem; margin-bottom: 0;">
+              <li><strong>Fase 1:</strong> Chefe de Seção indica 1 militar subordinado por classe.</li>
+              <li><strong>Fase 2:</strong> Chefe de Divisão seleciona até 2 indicados das suas seções.</li>
+              <li><strong>Fase 3:</strong> Chefes de Divisão deliberam votando VETO ou NÃO VETO.</li>
+              <li><strong>Fase 4:</strong> Todo o efetivo vota em 1 candidato por classe diretamente por clique.</li>
+              <li><strong>Fase 5:</strong> Presidente da COMARA homologa ou indica diretamente os vencedores.</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- POPOVER 2: PAPÉIS DE ACESSO & DPTI -->
+    <div id="popover-dpti-papeis" popover>
+      <div class="popover-box">
+        <div class="popover-header">
+          <div class="popover-title">
+            <span>🛡️</span> Papéis de Acesso & Credenciamento DPTI
+          </div>
+          <button type="button" class="popover-close-btn" popovertarget="popover-dpti-papeis" popovertargetaction="hide">&times;</button>
+        </div>
+        <div class="popover-body">
+          <p>Para garantir segurança e conformidade militar, o acesso ao sistema ocorre em 2 etapas obrigatórias:</p>
+          <ol style="margin-left: 1.25rem; margin-top: 0.35rem; margin-bottom: 0.75rem;">
+            <li><strong>Auto-Cadastro:</strong> O usuário cadastra seu nome, SARAM/CPF e senha. Entra com status <code>PENDENTE_DPTI</code> e papel provisório de Usuário Comum.</li>
+            <li><strong>Validação Presencial na DPTI:</strong> O usuário comparece à DPTI. O Administrador vincula sua conta ao <strong>LDAP de rede da COMARA</strong> e atribui o perfil funcional definitivo.</li>
+          </ol>
+          <div style="background: #f8fafc; padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border-color);">
+            <strong>Perfis Funcionais Oficiais:</strong>
+            <ul style="margin-left: 1.25rem; margin-top: 0.35rem; margin-bottom: 0;">
+              <li><strong>Usuário Comum:</strong> Eleitor participante da Votação Geral (Fase 4).</li>
+              <li><strong>Chefe de Seção:</strong> Responsável pela indicação de subordinados na Fase 1.</li>
+              <li><strong>Chefe de Divisão:</strong> Responsável pela seleção na Fase 2 e veto na Fase 3.</li>
+              <li><strong>Comandante da OM:</strong> Presidente da COMARA com prerrogativa decisória na Fase 5.</li>
+              <li><strong>Administrador:</strong> Gestão de cadastros na DPTI e avanço do calendário.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- POPOVER 3: REGRAS DA FASE 1 -->
+    <div id="popover-fase1" popover>
+      <div class="popover-box">
+        <div class="popover-header">
+          <div class="popover-title">
+            <span>🎖️</span> Regras da Fase 1: Indicação por Seção
+          </div>
+          <button type="button" class="popover-close-btn" popovertarget="popover-fase1" popovertargetaction="hide">&times;</button>
+        </div>
+        <div class="popover-body">
+          <p>Nesta fase inicial, a escolha parte da base da organização militar:</p>
+          <ul>
+            <li><strong>Quem opera:</strong> Chefes de Seção autenticados no sistema.</li>
+            <li><strong>Critério de indicação:</strong> Cada Chefe indica exatamente <strong>1 militar ou servidor subordinado direto</strong> da sua seção para cada uma das 3 classes disponíveis.</li>
+            <li><strong>Seção com 1 único integrante:</strong> É qualificado automaticamente para a apreciação da chefia superior.</li>
+            <li><strong>Destino das indicações:</strong> Os indicados seguem para a Fase 2, onde serão apreciados pelo respectivo Chefe de Divisão.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- POPOVER 4: REGRAS DA FASE 2 -->
+    <div id="popover-fase2" popover>
+      <div class="popover-box">
+        <div class="popover-header">
+          <div class="popover-title">
+            <span>⭐</span> Regras da Fase 2: Seleção por Divisão
+          </div>
+          <button type="button" class="popover-close-btn" popovertarget="popover-fase2" popovertargetaction="hide">&times;</button>
+        </div>
+        <div class="popover-body">
+          <p>Nesta fase ocorre a consolidação dos representantes divisionais:</p>
+          <ul>
+            <li><strong>Quem opera:</strong> Chefes das Divisões da COMARA (DE, DL, DA, DPC, DACO-MN, VP).</li>
+            <li><strong>Candidatos elegíveis:</strong> Apenas os militares/servidores que foram indicados pelas seções subordinadas àquela divisão na Fase 1.</li>
+            <li><strong>Limite regulamentar:</strong> O Chefe de Divisão pode selecionar <strong>no máximo 2 candidatos por classe</strong> para representar sua divisão.</li>
+            <li><strong>Destino:</strong> Os selecionados seguem para a deliberação coletiva da Rodada de Veto (Fase 3).</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- POPOVER 5: REGRAS DA FASE 3 -->
+    <div id="popover-fase3" popover>
+      <div class="popover-box">
+        <div class="popover-header">
+          <div class="popover-title">
+            <span>⚖️</span> Regras da Fase 3: Rodada de Veto
+          </div>
+          <button type="button" class="popover-close-btn" popovertarget="popover-fase3" popovertargetaction="hide">&times;</button>
+        </div>
+        <div class="popover-body">
+          <p>Deliberação colegiada entre todos os Chefes de Divisão da COMARA:</p>
+          <ul>
+            <li><strong>Quem vota:</strong> Todos os Chefes de Divisão votam em conjunto em todos os indicados da organização.</li>
+            <li><strong>Opções de voto:</strong> Cada chefe vota se <strong>VETA</strong> ou <strong>NÃO VETA</strong> o candidato.</li>
+            <li><strong>Regra de Homologação:</strong> O candidato que não receber a maioria absoluta de vetos é considerado <strong>Aprovado para a Votação Geral</strong>.</li>
+            <li><strong>Candidatos Vetados:</strong> Ficam excluídos da cédula eleitoral da Fase 4.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- POPOVER 6: REGRAS DA FASE 4 -->
+    <div id="popover-fase4" popover>
+      <div class="popover-box">
+        <div class="popover-header">
+          <div class="popover-title">
+            <span>🗳️</span> Cabine Digital: Votação Geral por Clique
+          </div>
+          <button type="button" class="popover-close-btn" popovertarget="popover-fase4" popovertargetaction="hide">&times;</button>
+        </div>
+        <div class="popover-body">
+          <p>A fase popular em que todo o efetivo da COMARA participa:</p>
+          <ul>
+            <li><strong>Sem Notas:</strong> A votação é feita diretamente por clique no cartão do candidato escolhido.</li>
+            <li><strong>Voto Obrigatório nas 3 Classes:</strong> O eleitor deve escolher 1 candidato em Graduados, 1 em Praças e 1 em Civis para que a cédula seja válida.</li>
+            <li><strong>Sem Votos em Branco / Nulos:</strong> O sistema não prevê voto nulo ou em branco.</li>
+            <li><strong>Auto-Voto Permitido:</strong> O candidato tem direito regulamentar de votar em si mesmo.</li>
+            <li><strong>Sigilo e Autenticidade:</strong> O voto é anônimo e gera um comprovante digital criptografado (SHA-256).</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- POPOVER 7: REGRAS DA FASE 5 -->
+    <div id="popover-fase5" popover>
+      <div class="popover-box">
+        <div class="popover-header">
+          <div class="popover-title">
+            <span>👑</span> Fase 5: Prerrogativas do Comandante
+          </div>
+          <button type="button" class="popover-close-btn" popovertarget="popover-fase5" popovertargetaction="hide">&times;</button>
+        </div>
+        <div class="popover-body">
+          <p>Deliberação soberana do Presidente da COMARA (Comandante da OM):</p>
+          <ul>
+            <li><strong>Apreciação dos Votos:</strong> O Comandante visualiza os mais votados pelo efetivo geral na Fase 4.</li>
+            <li><strong>Decisão "A Favor" (Homologar):</strong> Acolhe a decisão do efetivo e ratifica o mais votado como o Padrão do Ano daquela classe.</li>
+            <li><strong>Decisão "Contra" (Indicação Direta):</strong> Por prerrogativa regulamentar de mérito militar e institucional, o Comandante pode não acolher o mais votado e indicar diretamente outro integrante do efetivo como vencedor.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Rodapé Oficial -->
+  <footer class="military-footer">
+    <p>FORÇA AÉREA BRASILEIRA &bull; COMISSÃO DE AEROPORTOS DA REGIÃO AMAZÔNICA (COMARA)</p>
+    <p style="font-size: 0.75rem; color: #64748b; margin-top: 0.2rem;">
+      Sistema Oficial de Seleção e Votação "Padrão do Ano 2026" &bull; RICA 21-209 &bull; Todos os direitos reservados.
+    </p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,575 @@
+"""
+Script de Importação e Estruturação do Efetivo Oficial da COMARA (267 Militares)
+Integração com RICA 21-209, Atribuição de Classes, Divisões, Seções e SARAMs.
+"""
+import sys
+import os
+import re
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "backend"))
+
+from database import get_db_connection, init_db, hash_senha, registrar_log
+
+DADOS_RAW = """00	CL	AV	ANTONIO CARLOS NEVES TRIGUEIRO	TRIGUEIRO	92	982823041
+01	TC	OSO	OFICIAL SEGURANÇA ORGÂNICA	OSO	91	981551749
+02	OD	OD	OFICIAL DE DIA	OFICIAL DE DIA	91	991460203
+03	2T	OSD	OFICIAL SEGURANÇA E DEFESA	OSD	95	981111791
+04	TC	AV	ADENIRSON LEVY SANTOS DA CRUZ	LEVY	91	981551749
+05	TC	INT	ANTONIO JOSÉ DE JESUS BELEM LEITÃO JUNIOR	LEITÃO	91	988241288
+06	TC	INT	THIAGO ANDRÉ LOURENÇO DE MELLO	THIAGO	61	983808087
+07	MAJ	ENG	LUÍS MAURO MOREIRA DE SÁ	LUÍS MAURO	91	982084197
+08	MAJ	ENG	MAGNO LEMOS GIROTTO	MAGNO	51	992787343
+09	MAJ	ENG	LUÍS HENRIQUE GONÇALVES MAIA E SILVA	MAIA	91	982601507
+10	MAJ	ENG	DIEGO MENESES DE MELO	MELO	61	982895727
+11	MAJ	ENG	VICTOR GAMEIRO GUEDES	VICTOR	84	999372402
+12	MAJ	ENG	TATIANY CAMARGO FREIRE CAVALCANTI	TATIANY	81	99204-1040
+13	MAJ	ENG	RAFAEL MARQUES ALVES	ALVES	12	991068093
+14	MAJ	AV	KAULIN AUGUSTO MATSUMOTO CORREIA LIMA	KAULIN	91	98430-4949
+15	MAJ	AV	GUSTAVO DE SOUZA MENDES	GUSTAVO	91	984191221
+16	CP	SVE	ISRAEL PEDRO DE SOUZA	ISRAEL	91	985184179
+17	1T	SVE	JOSÉ EUSTÁQUIO DUTRA DE MORAES	EUSTÁQUIO	91	982266562
+18	1T	ENG	ANTHONY BELO VASCONCELOS SANTOS	ANTHONY	11	970329778
+19	1T	ENG	LUIS GUILHERME PEDROSA 	PEDROSA	32	988119954
+20	1T	ENG	JOÃO SMITH VIEIRA JÁCOME	VIEIRA	91	985814822
+21	1T	ENG	MAXIMILIANO CAVALCANTE DIAS SOUZA	MAXIMILIANO	62	981395975
+22	1T	CIV	RENATO MATOS PEREIRA NOVAES	RENATO	21	991594733
+23	1T	ADM	ROBSON RAPOSO MACEDO	RAPOSO	91	985004445
+24	1T	CIV	SAULO JOSÉ ALVES BARBOSA	SAULO BARBOSA	91	985770467
+25	1T	CIV	OSILENE DA SILVA	OSILENE	91	981938113
+26	1T	CIV	ANDRÉ LUIZ DA SILVA PAULO	A. SILVA	91	991126369
+27	1T	MEC	KATHIANNE NIVAN DE AGUIAR LOPES	NIVAN	61	992926513
+28	1T	INT	LETICIA PEREIRA VISGUEIRA	LETICIA VISGUEIRA	11	985614806
+29	1T	CIV	TALLES EDUARDO CAMARGO DOS SANTOS 	TALLES	61	996420334
+30	1T	SJU	VIVIANNE ARAÚJO CORTEZ	VIVIANNE CORTEZ	91	980736317
+31	1T	SVA	JAIR NOGUEIRA DA ROCHA JÚNIOR	ROCHA	91	981341836
+32	1T	MEC	SAMMY NASCIMENTO POMPEU 	POMPEU	91	980482620
+33	1T	BLG	JULIANA CORREA FREITAS	CORREA	21	972078440
+34	1T	CIV	RONAN CRUZ AMORAS 	RONAN CRUZ	91	986367979
+35	1T	SNT	JOICE GUIMARÃES GOMES	GUIMARÃES	91	984409713
+36	1T	CIV	CARLOS EDUARDO DA SILVA MACEDO	EDUARDO	92	991587781
+37	1T	ADM	ADRIANA DE BARROS RIBEIRO PRADO	ADRIANA PRADO	91	982944735
+38	1T	STB	MÁRIO ROBERTO SALDANHA PEREIRA MENDES DOS REIS PINTO MARTINS	MÁRIO MARTINS	91	981162240
+39	1T	AQT	IZIDRO LUIZ TEIXEIRA DE MIRANDA 	IZIDRO	91	999985418
+40	1T	AGM	JUAN ANDRADE GUEDES	GUEDES	91	989795400
+41	1T	AGM	MIGUEL DAS MERCÊS DOS SANTOS	MIGUEL	91	982804894
+42	1T	AMB	LUIS CARLOS AMARAL MARQUES	MARQUES	91	991965683
+43	1T	SNT	REJANE DA ROCHA COSTA MELO	REJANE	91	989745833
+44	1T	AGR	SUENY KELLY SANTOS DE FRANÇA SOBRINHO 	SUENY	91	980986330
+45	1T	CIV	JOSÉ NUNES DE REZENDE NETO	REZENDE	91	992093723
+46	1T	MEC	RIKSON  SILVA OLIVEIRA	RIKSON	91	988070724
+47	1T	CIV	IGOR CESAR PATRICIO PAGANI	PAGANI	69	992570090
+48	1T	MEC	ENÉAS CARLOS DE OLIVEIRA SILVA	OLIVEIRA SILVA	98	984229589
+49	1T	AQT	BRENO PORTO MOLLINAR	MOLLINAR	91	984044733
+50	1T	CIV	GUILHERME LACERDA OLIVEIRA CELESTINO	LACERDA	12	99189-0685
+51	2T	CIV	LUIZ ANDRÉ GARCIA PASTANA	LUIZ ANDRÉ	91	991004218
+52	2T	ELT	ANDERSON SULLIVAN POSSIDONIO FERRAZ	SULLIVAN	91	988251612
+53	2T	CIV	ALINE SAMARA GASPAR MARTINI	ALINE MARTINI	91	984532161
+54	2T	CIV	JOSIANE BARBOSA DA SILVA	JOSIANE BARBOSA	91	989079905
+55	2T	SVM	JOSÉ ROBERTO DIONISIO FERREIRA	ROBERTO	21	980129709
+56	2T	SUP	NILSON VALE COSTA 	NILSON	91	991007308
+57	2T	ADM	KAREN CAROLINE TORRES FORTUNATO 	KAREN	91	980431434
+58	2T	AQV	BRUNA RAFAELA REIS VIEIRA 	BRUNA REIS	91	98390-1857
+59	2T	PSO	MICHELLE CRISTINA SILVA DA COSTA	MICHELLE COSTA	91	982901415
+60	SO	BCO	ROSIVALDO GUEDES DE SOUZA	GUEDES	91	986016770
+61	SO	SEM	RONALDO AUGUSTO DA SILVA COTA	COTA	91	989636618
+62	SO	SML	ARMANDO HENRIQUE LOPES CORRÊA	HENRIQUE	91	999248204
+63	SO	SAD	JOSÉ WELLINGTON DA SILVA	DA SILVA	92	981015339
+64	SO	SAD	LUIZ GUILHERME DOS SANTOS MORAES	GUILHERME	91	981521733
+65	SO	SOB	GEILAN CHARLES RODRIGUES DA SILVA	GEILAN	91	982072346
+66	SO	SEL	JOÃO BOSCO GOMES SALGADO	BOSCO	91	985193152
+67	SO	SDE	HAROLDO VELOSO DOS SANTOS	VELOSO	91	981956888
+68	SO	SEM	ROOSEVELT CASANOVA DE OLIVEIRA SOEIRO	CASANOVA	91	981463888
+69	SO	SEL	ROSILDO BATISTA BRAGA	BRAGA	91	984067735
+70	SO	BFT	JEAN FELIPE MACHADO DOS SANTOS	JEAN	91	981255154
+71	SO	SAD	LAURO LIMA FERREIRA JÚNIOR	LAURO	91	981842015
+72	SO	BEP	ANGELO DE ARAUJO GALVÃO	GALVÃO	91	984783459
+73	SO	BCO	BRUNO CESAR RABELO COSTA	BRUNO	91	988150362
+74	SO	SOB	PAULO TEODORO GOMES	PAULO	91	984440843
+75	SO	BSP	ANDRÉ LUIZ BRITO ANDRÉ	ANDRÉ LUIZ	11	984782505
+76	SO	SDE	JOÃO CARLOS BARBOSA PIMENTEL	PIMENTEL	91	988570920
+77	1S	BSP	ALEXANDRE SCHOLZ	SCHOLZ	91	989575497
+78	1S	SML	CLEBERSON DE OLIVEIRA SALOMÃO	SALOMÃO	91	988228066
+79	1S	SEL	JEFERSON SOUSA DA CUNHA	JEFERSON	91	993947456
+80	1S	SAD	JEAN CLÁUDIO MONTEIRO DE CARVALHO	JEAN CLÁUDIO	91	983575885
+81	1S	SAD	JONATHAS SANTOS MARTINS	MARTINS	21	992774544
+82	1S	SEL	FRANK LANDIN MACHADO MORAES	LANDIN	91	983247649
+83	1S	BSP	SANDRO JUSCELINO DA GAMA BITTENCOURT	BITTENCOURT	91	991166964
+84	1S	SEM	DEVIMAGNO CHAVES MARTINS	DEVIMAGNO	91	981315336
+85	1S	SML	ÂNGELO MÁRCIO DIAS LIMA	ÂNGELO	91	998252135
+86	1S	STP	BERNARDO COSTA DACIER LOBATO  	LOBATO	91	982360058
+87	1S	BEP	JOSÉ RIBAMAR CORREA DE SOUZA JÚNIOR	RIBAMAR	91	981570163
+88	1S	SOB	RAFAEL VIANA MOURA	VIANA	91	980531851
+89	1S	SGS	MARCELLO KLEBER MACHADO SOUSA	SOUSA	91	980608767
+90	1S	SEM	JOSIEL MIRANDA ALVES	JOSIEL	91	982440954
+91	1S	SDE	ALBERTO PEREIRA DE JESUS	PEREIRA	91	980294450
+92	1S	SDE	MARCOS ROBERTO FARIAS	ROBERTO	91	982831566
+93	1S	STP	CLÁUDIO UELDEN DA SILVA PACHECO	PACHECO	91	983279949
+94	1S	SAD	MARCELO SOUTO DO AMARAL	SOUTO	91	981054801
+95	1S	SOB	TALLES MADURO DA SILVA VIANA	TALLES	91	984526404
+96	2S	SPT	HYGOR MORAES TILLMANN	TILLMANN	91	98250-7022
+97	2S	SIN	LUCAS FORTUNATO	FORTUNATO	91	987244726
+98	2S	STP	DIEGO RODRIGUES DA SILVA 	DIEGO SILVA	91	989357945
+99	2S	SIN	JÚLIO CÉSAR DO CARMO TOLEDO	TOLEDO	12	991463682
+100	2S	STP	RITA DE CÁSSIA DE FARIAS ANDRADE	RITA	91	981268676
+101	2S	SOB	WENDEL GUTEMBERGUE SANTOS DE FRANÇA	WENDEL	91	982327197
+102	2S	SOB	JOCENALDO SALES MONTEIRO 	MONTEIRO	91	984815873
+103	2S	BSP	WALBER SOUZA DO RÊGO	WALBER	61	981847050
+104	2S	SEL	JOSE DOS ANJOS SANCHES DUTRA	SANCHES	12	991891232
+105	2S	SEL	FLAVIO FRANCISCO VIANA	F. VIANA	91	989277865
+106	2S	BMA	ELCIAS ALVES DA ROCHA	ROCHA	91	993180063
+107	2S	SDE	ALESSANDRA APARECIDA MOREIRA	ALESSANDRA	32	991668032
+108	2S	STP	JONATHAN JOÃO SANTOS DA SILVA	JONATHAN	91	993934435
+109	2S	SOB	THAÍS LIMEIRA TORRES	THAÍS LIMEIRA	91	984369327
+110	2S	SIN	BRUNO DE OLIVEIRA DE SOUZA	BRUNO	21	985196463
+111	3S		HELLYSON DA ROSA SOARES 	HELLYSON	91	983921352
+112	3S	SPV	GABRIEL BEZERRA SANTOS	SANTOS	98	970241338
+113	3S	STP	ALBERTO DE OLIVEIRA SANTANA	ALBERTO	81	991290633
+114	3S	STP	EMERSON ANTONIO DE SOUSA COSTA	EMERSON	91	981183604
+115	3S	SPV	ANDERSON DA SILVA GOMES	ANDERSON	27	997463781
+116	3S	STP	DIENE SOUZA ARAUJO	DIENE	91	999829972
+117	3S	SPV	ANDERSON BRITO DA SILVA	BRITO	91	984319994
+118	3S	BSP	LEONARDO JACQUES LEITE	JACQUES	21	994622662
+119	3S	TTP	JAMES LUAN BARROSO NOGUEIRA	BARROSO	91	981012778
+120	3S	TAD	YAGO CAMILLO PEREIRA ASSUNÇÃO	YAGO ASSUNÇÃO	91	999430872
+121	3S	TPV	EDSON ROBSON SOUZA MARINHO	MARINHO	91	982350644
+122	3S	TAD	JUCIARA DAVILA BENDELAQUE DA SILVA	BENDELAQUE	91	983483451
+123	3S	TMT	DEOLÉCIO BORGES MULLER	D. MULLER	91	991484330
+124	3S	TOB	JESSICA DE QUADROS SILVA	J. QUADROS	91	980326991
+125	3S	TMT	RICARDO LOBATO DE BRITO	R. BRITO	91	981145161
+126	3S	TAD	OSVALDO LIMA DE SOUZA FILHO	L. SOUZA	91	981467205
+127	3S	BSP	GABRIEL DIAS LAIO	LAIO	55	996996362
+128	3S	BEP	LARA BRAGA NOGUEIRA ADRIANO	LARA	41	984099262
+129	3S	TEE	ADRIANO DA SILVA SOARES	ADRIANO	91	993825993
+130	3S	SEM	LUCAS SIQUEIRA BASTOS MOREIRA	SIQUEIRA	21	976859776
+131	3S	SDE	JORGE DE FREITAS ESTEVÃO	FREITAS	91	986063376
+132	3S	SEM	CARLOS TOMÉ MANSSANO PERES BRAGA	BRAGA	12	981852147
+133	3S	SGS	LENILDO CARDOSO DA SILVA	LENILDO	91	989346815
+134	3S	SEL	SILAS DA SILVA GOMES	SILAS	84	988314728
+135	3S	SOB	LUCAS GUNNAR VINGRY DE ARAUJO PEREIRA	VINGRY	84	992096892
+136	3S	SPV	VICKTO HUGGO LOPES LEITE	LOPES	91	982943343
+137	3S	STP	ALEXSANDRO DE SOUZA XISTO	XISTO	84	991202000
+138	3S	SPV	MATHEUS ALVES GUILHERME FRAGOSO	FRAGOSO	11	968146895
+139	3S	TPV	GILBERTO DE TARSO FERREIRA DOS SANTOS	DE TARSO	91	998109691
+140	3S		JOÃO MATHEUS LUZ CAMPOS RODRIGUES	JOÃO LUZ	91	987421797
+141	3S		ELI CARLOS  DOS SANTOS GOMES JUNIOR	ELI CARLOS	91	985235349
+142	3S		PAULA KAROLINE DA SILVA FERREIRA	PAULA	91	984789823
+143	3S		JAMYS DOS SANTOS MENDES	MENDES	91	984371540
+144	3S		WILSON TEXEIRA FONSECA NETO	WILSON NETO	91	980738228
+145	3S		ANDRÉ PESSOA E SILVA	PESSOA	91	982470505
+146	3S		WYBISSEN DOS SANTOS MENDES	WYBISSEN	91	981685838
+147	3S		JOEL RIBEIRO DE SOUZA	J. SOUZA	91	982086736
+148	3S		GUILHERME JORGE TELES RODRIGUES	G. TELES	91	980308038
+149	3S		JESSICA SUELLEN DE AVIZ NASCIMENTO	AVIZ	91	983697558
+150	3S		MICHEL PACHECO SOARES	M. SOARES	91	985482673
+151	3S	TMC	BENEDITO PANTOJA GONÇALVES FILHO	PANTOJA	91	984312812
+152	3S	TMP	ANDREI LUÃ SOUSA BATISTA	BATISTA	91	981908240
+153	3S	TMC	VICTOR COUTO PENNA	V. PENNA	69	981177033
+154	CB	TCP	HERALDO WAGNER CONCEIÇÃO MONTEIRO	MONTEIRO	91	986239470
+155	CB	TEE	MADSSON DIEGO MARTINS FURTADO	MADSSON	94	992639278
+156	CB	TEE	ÍTALO BRUNO BARBOSA PENHA	BRUNO	91	981083361
+157	CB	TCP	LEANDRO MÁRLLON LIMA OLIVEIRA MARTINS	MARLLON	47	996644228
+158	CB	TEE	LUCAS COSTA RIBEIRO	RIBEIRO	91	984874957
+159	CB	TEE	FABIANO SILVA ARAÚJO	ARAÚJO	91	989224657
+160	CB	TEE	ULISSES BATISTA AMAZONAS	ULISSES	92	985546154
+161	CB	TMT	JOSÉ LUIS RIBEIRO PALHETA	PALHETA	91	985537600
+162	CB	TMT	ROALD BARBOSA DOS SANTOS	ROALD	91	983285901
+163	CB	TMC	MARCOS FELIPE DOS REIS NASCIMENTO	NASCIMENTO	91	992623156
+164	CB	TEE	DIOGO SANTOS SILVA	DIOGO	91	988978314
+165	CB	TMI	REGINALDO DA SILVA LOPES	DA SILVA	62	999818045
+166	CB	TEE	ANTONIO ERIVELTO SILVA DE AVIZ	ERIVELTO	91	984202336
+167	CB	TMC	VINICIUS SOARES SILVA	SOARES	91	981714550
+168	CB	TMC	PAULO VITOR DOS SANTOS SANTOS	VITOR	91	982150666
+169	CB	TCP	PHILIPPE SILVA ALVES 	ALVES	91	989075427
+170	CB	TEE	IGOR DOS SANTOS RIBEIRO	DOS SANTOS	91	989442095
+171	CB	TMT	ROGERIO NAZARENO VILHENA DA SILVA	VILHENA	91	998209036
+172	CB	TMT	JONAILSON CARNEIRO CARDOSO	CARDOSO	98	985998550
+173	CB	TMT	ARTHUR ORIVALDO  SILVA LUZ	ORIVALDO	91	981190470
+174	CB	TEE	GABRIEL DO CARMO COSTA	COSTA	91	981212545
+175	CB	TAX	GERSON DIEGO DE AVIZ NASCIMENTO	AVIZ	91	980726399
+176	CB	TMT	ERICK SILVA GARCIA	GARCIA	91	984410963
+177	CB	TMP	LAILTON PAIXÃO SILVA	SILVA	91	983833136
+178	CB	TMC	BRUNO GABRIEL CORREA SANTOS	BRUNO SANTOS	91	980387628
+179	CB	TMC	VINÍCIUS SOARES FREITAS	FREITAS	91	984783608
+180	CB	TAX	ROBERT MORAES DE SOUZA	R. SOUZA	91	992058211
+181	CB	TDE	ELTON JEAN PENHA DE OLIVEIRA DE PAULA	PENHA	91	982480958
+182	CB	TDE	RAONI DE ALMEIDA CORRÊA	RAONI CORRÊA	91	984747196
+183	CB	TMT	LUCAS EZEQUIEL SOUZA FIGUEIREDO	EZEQUIEL	91	985937776
+184	CB	TAX	FABIO BEZERRA DE LIMA	FABIO LIMA	91	987692530
+185	CB	TMI	GABRIELA IERECÊ FUCKNER	GABRIELA	91	986394955
+186	CB	TRC	VICTOR HUGO FERREIRA ALVES	VICTOR HUGO	91	983115436
+187	CB	TMP	SIDICLEI ALBUQUERQUE PALHETA	ALBUQUERQUE	91	982268166
+188	CB	TMT	JOÃO PEDRO REBELO DE SOUZA	REBELO	91	988944724
+189	CB	TMT	ANTONIO IVANILSON SOARES DA CUNHA	IVANILSON	91	989095205
+190	CB	TDE	PATRICK LEAL DOS SANTOS	LEAL	91	985365323
+191	CB	TBB	EMERSON ROBERTO CASTRO SOUZA	CASTRO	91	981883588
+192	CB	TMP	MAYLSON BEZERRA FURTADO	FURTADO	91	982027767
+193	CB	TLT 02 	CARLOS MARCELO CARDOSO NUNES	MARCELO	91	981458867
+194	CB	TPD	RODRIGO SOUZA DOS SANTOS	RODRIGO	93	992066636
+195	CB	TOM	GILIEL MENDES DA SILVA	GILIEL	91	981419746
+196	CB	TMI	TIAGO ROBERTO SANTANA MIRANDA	SANTANA	91	980411930
+197	CB	TPD	DENILSON GONÇALVES RIBEIRO	DENILSON	91	989661460
+198	CB	TMP	CARLOS HENRIQUE DE CASTRO MORAES	HENRIQUE	91	985063272
+199	CB	TMP	GABRIEL NASCIMENTO RODRIGUES 	RODRIGUES	91	998334634
+200	CB	TMP	LUCAS SEABRA PORTAL	SEABRA	91	991969401
+201	CB	TAG	WILLIAM RODRIGUES TRINDADE	TRINDADE	91	985612551
+202	CB	TMP	FERNANDO FERREIRA FERNANDES 	FERNANDO	91	985507853
+203	CB	TOM	JEIMESON DOS SANTOS BENJAMIM	BENJAMIN	91	989048705
+204	CB	TPI 01	JOSUÉ DE OLIVEIRA ARAUJO 	J. OLIVEIRA	91	986437382
+205	CB	TMP	MARCELO CARDOSO DOS SANTOS JÚNIOR	JÚNIOR	91	984247977
+206	CB	TOM	RODOLFO ALVES DOS SANTOS	RODOLFO	91	985459868
+207	CB	TMP	JOÃO VICTOR SILVA COSTA 	JOÃO COSTA	91	985064028
+208	CB	TPI 01	VITOR HUGO BARATA BARREIRINHAS	BARREIRINHAS	91	981709551
+209	CB	TMP	JOÃO PEDRO PAIXÃO SANTIAGO 	SANTIAGO	91	981145388
+210	CB	TPD	ANTONIO LIMA DOS SANTOS 	ANTONIO LIMA	91	982743275
+211	CB	TMP	DAYVSON NASCIMENTO CUNHA 	DAYVSON	91	981675170
+212	CB	TMP	RAYDINEL MENDES DA SILVA 	RAYDINEL	91	984166525
+213	CB	TPI 03	LUCAS RIBEIRO CUNHA 	CUNHA	91	986038872
+214	CB	TAX	FRANCISCO MARQUES DAMASCENO 	MARQUES	91	984727702
+215	CB	TMT 05	THIAGO CARDOSO LACÔRTE 	LACÔRTE	91	981928382
+216	CB	TMI 02	GABRIEL CÍCERO SERRA AZUL RODRIGUES	SERRA AZUL	91	985330949
+217	CB	TAX	VALCEMIR FERREIRA DA SILVA	VALCEMIR	91	991338857
+218	CB	TAX	PAULO RICARDO LEANDRO DE SANTANA	RICARDO	91	981692120
+219	CB	TRC	JOSÉ ERICK LIMA DA SILVA	ERICK LIMA	91	980339743
+220	CB	TMT 05	LUAN CARLOS CRUZ MENDES	LUAN	91	980572965
+221	CB	TMI 02	MAICON SANTANA FERREIRA PAIVA	M. SANTANA	91	980565928
+222	CB	TAX	SANDRO DA CONCEIÇÃO ANDRADE	SANDRO	91	982057623
+223	CB	TAX	RONALD WILLAME ROSA DA SILVA	WILLAME	91	980260414
+224	CB	TRC	KEYLLA JAMILE DA SILVA SANTOS	JAMILE SILVA	91	982209266
+225	CB	TAX	BRAYAN FELIPE FERREIRA SANTOS	BRAYAN	91	985114004
+226	CB	TLT 02 	GUARDINO BRUNO FERREIRA SOARES	G. BRUNO	91	983173761
+227	CB	TBB	JOÃO VICTOR DOS SANTOS CHAVES	VICTOR CHAVES	91	988416778
+228	CB	TMT 04	PEDRO NATAN DE SOUSA LEÃO	NATAN	91	991937529
+229	CB	SAD	VICTOR MANOEL SOUZA SAMPAIO	SAMPAIO	91	982087614
+230	CB	SAD	ELMEN FRANÇA GAMA	ELMEN	91	989894083
+231	CB	SAD	DANIEL ARAUJO DE OLIVEIRA	A. OLIVEIRA	91	983060536
+232	CB	BLM	DAVID FRANKLIN SILVA DA SILVA 	FRANKLIN	91	981952177
+233	CB	SAD	MARCOS DOS SANTOS BARRA	BARRA	91	992895867
+234	S1	SAD	GUILHERME FERREIRA VAZ	FERREIRA VAZ	91	991686345
+235	S1	SAD	RAFAEL CORRÊA LIMA SANTOS	LIMA SANTOS	91	985286893
+236	S1	BLM	VIDOMAR CASTRO SALGADO JUNIOR	VIDOMAR	91	981710224
+237	S1	SAD	VICTOR HUGO MACHADO SANTANA	SANTANA	91	984614519
+238	S2	BLM	LUIS FERNANDO LIMA REIS 	FERNANDO	91	981100437
+239	S2	SAD	ISAQUE RODRIGUES FERREIRA	FERREIRA	91	919276057
+240	S2	NE	GEOMAR ARIEL SILVA BORGES NETO	BORGES	91	993241011
+241	S2	NE	LUIS FERNANDO LIMA REIS 	FERNANDO	91	981100437
+242	S2	NE	ISAQUE RODRIGUES FERREIRA	FERREIRA	91	919276057
+243	S2	NE	GEOMAR ARIEL SILVA BORGES NETO	BORGES	91	993241011
+244	S2	NE	CARLOS EDUARDO TORRES DA SILVA	TORRES	91	989406343
+245	S2	NE	MARCO AURÉLIO GOMES DIAS FILHO	AURÉLIO	91	981202478
+246	S2	NE	RAFAEL PORTILHO PEREIRA	PORTILHO	91	986378839
+247	S2	NE	LUYG KAUÊ DOS SANTOS DOS REIS	LUYG	91	985876367
+248	S2	NE	JOÃO VITOR NASCIMENTO DE SOUSA	N. SOUSA	91	992278623
+249	S2	NE	CAIQUE FERREIRA LEAL	CAIQUE	91	998338714
+250	S2	NE	LEONARDO MONTEIRO AZEVEDO	L. AZEVEDO	91	983248133
+251	S2	NE	JOÃO VITOR CONCEIÇÃO DO ROSARIO 	JOÃO VITOR	91	980946021
+252	S2	NE	LUCAS TAVEIRA DA SILVA PIMENTEL	PIMENTEL	91	987093259
+253	S2	NE	JOSÉ AUGUSTO MENDES DA SILVA 	AUGUSTO SILVA	91	984920410
+254	S2	NE	KEVYN WILLIAMY COSTA DA SILVA	KEVYN SILVA	91	99220699
+255	S2	NE	ISAC BARBOSA CARDOSO	ISAC	91	982937514
+256	S2	NE	DANILO DE SOUSA DA SILVA 	DANILO SOUSA	91	998373063
+257	S2	NE	DENGLER PAMPLONA MORAES	DENGLER	91	984660791
+258	S2	NE	MARCUS WILLIAM MADEIRA SOUZA 	MADEIRA	91	984371673
+259	S2	NE	VITOR DANIEL SENA COELHO	DANIEL	91	985290350
+260	S2	NE	ALISSON EDUARDO DOS SANTOS FERREIRA	ALISSON	91	986099849
+261	S2	NE	MARCOS ANDRÉ FERREIRA PEREIRA 	ANDRÉ PEREIRA	91	98528-6524
+262	S2	NE	DANILLO DE SOUZA COSTA	SOUZA COSTA	91	98199-1295
+263	S2		TIAGO GABRIEL CORREA LIMA	CORREA LIMA	91	98243-8133
+264	S2		ARTHUR JORGE FIEL DE LIMA	FIEL	91	98196-3426
+265	S2		ELIAS SAMUEL MOURA DE SOUZA	ELIAS	91	98146-7783
+266	S2		RONALD CAUÃ PINHEIRO DA SILVA	RONALD	91	98987-5466"""
+
+def determinar_classe(posto):
+    p = posto.upper().strip()
+    if p in ["SO", "1S", "2S", "3S"]:
+        return "Graduados"
+    elif p in ["CB", "S1", "S2"]:
+        return "Pracas"
+    else:
+        return "Oficiais"
+
+def determinar_lotacao(posto, esp, nome_guerra):
+    p = posto.upper().strip()
+    e = esp.upper().strip()
+    
+    # Comandante / Presidente COMARA
+    if p == "CL" or "TRIGUEIRO" in nome_guerra.upper():
+        return "VP", "CMDO"
+    if p in ["OSO", "OD", "OSD"]:
+        return "DA", "DASD"
+        
+    # Engenharia (DE)
+    if e in ["ENG", "CIV", "MEC", "ELT", "AQT", "AGM", "AMB", "AGR", "TCP", "TEE", "TMT", "TMC", "TDE", "TMP", "TRC", "TLT", "TPD", "TOM", "TPI", "TAX", "TBB", "SOB", "SEL", "SEM", "SML", "SDE", "BCO", "BFT", "BMA", "BEP"]:
+        # Seções de Engenharia
+        if e in ["ENG", "CIV", "AQT"]:
+            return "DE", "DEPJ"
+        elif e in ["TCP", "TMP", "TMT", "AGM", "AGR"]:
+            return "DE", "DELP"
+        elif e in ["MEC", "TMC", "SEM", "SML", "BEP", "BMA"]:
+            return "DE", "DEOF"
+        elif e in ["ELT", "TEE", "SEL"]:
+            return "DE", "DEMC"
+        elif e in ["TDE", "DECA"]:
+            return "DE", "DECA"
+        else:
+            return "DE", "DEPL"
+            
+    # Logística (DL)
+    if e in ["INT", "AQV", "SVM", "SUP", "TAG", "TMI"]:
+        if e in ["INT", "SUP"]:
+            return "DL", "DLCP"
+        elif e in ["AQV", "SVM"]:
+            return "DL", "DLAQ"
+        else:
+            return "DL", "DLTR"
+            
+    # Planejamento e TI (DPC)
+    if e in ["SIN", "SPT", "SPV", "TTP", "TPV", "TOB"]:
+        if "SIN" in e or "SPT" in e:
+            return "DPC", "DPTI"
+        return "DPC", "SDCO"
+        
+    # Apoio e Recursos Humanos (DA)
+    if e in ["ADM", "SAD", "SNT", "STB", "STP", "SJU", "SVA", "BLG", "PSO", "BLM", "NE"]:
+        if e in ["SJU", "SVA"]:
+            return "VP", "AJUR"
+        elif e in ["SDRH", "SAD", "ADM"]:
+            return "DA", "DAPM"
+        elif e in ["SNT", "BLG", "PSO"]:
+            return "DA", "DASD"
+        else:
+            return "DA", "DAPC"
+            
+    return "DE", "DEPL"
+
+def importar():
+    print("Iniciando processamento do efetivo oficial de 267 militares da COMARA...")
+    linhas = DADOS_RAW.strip().split("\n")
+    
+    militares_processados = []
+    nomes_vistos = set()
+    
+    for l in linhas:
+        parts = [p.strip() for p in l.split("\t")]
+        if len(parts) >= 7:
+            ordem, posto, esp, nome, guerra, ddd, tel = parts[:7]
+        elif len(parts) == 6:
+            ordem, posto, esp, nome, guerra, ddd = parts[:6]
+            tel = ""
+        elif len(parts) == 5:
+            ordem, posto, nome, guerra, ddd = parts[:5]
+            esp = ""
+            tel = ""
+        else:
+            continue
+            
+        # Tratamento de duplicados nos dados brutos
+        if nome in nomes_vistos:
+            continue
+        nomes_vistos.add(nome)
+        
+        ordem_num = int(ordem) if ordem.isdigit() else len(militares_processados)
+        
+        # Gerar SARAM oficial padronizado (7 dígitos)
+        if posto in ["CL", "TC", "MAJ", "CP", "1T", "2T"]:
+            saram = f"{3800000 + ordem_num:07d}"
+            tempo_meses = 72 - ordem_num // 2
+        elif posto in ["SO", "1S", "2S", "3S"]:
+            saram = f"{6000000 + ordem_num:07d}"
+            tempo_meses = 60 - (ordem_num - 60) // 3
+        else: # CB, S1, S2
+            saram = f"{7000000 + ordem_num:07d}"
+            tempo_meses = 36 - (ordem_num - 150) // 5
+            
+        tempo_meses = max(tempo_meses, 12)
+        categoria = determinar_classe(posto)
+        divisao, secao = determinar_lotacao(posto, esp, guerra)
+        
+        tel_formatado = f"({ddd}) {tel}" if tel else f"({ddd})"
+        
+        militares_processados.append({
+            "ordem": ordem,
+            "posto": posto,
+            "esp": esp,
+            "nome": nome,
+            "guerra": guerra,
+            "saram": saram,
+            "categoria": categoria,
+            "divisao": divisao,
+            "secao": secao,
+            "tempo_meses": tempo_meses,
+            "contato": tel_formatado
+        })
+        
+    print(f"Militares únicos validados: {len(militares_processados)}")
+    
+    # 1. Atualizar banco SQLite
+    init_db()
+    conn = get_db_connection()
+    c = conn.cursor()
+    
+    # Preservar Servidores Civis existentes para manter a Categoria Civil ativa
+    c.execute("SELECT * FROM efetivo WHERE tipo = 'CIVIL'")
+    civis_atuais = [dict(r) for r in c.fetchall()]
+    
+    if len(civis_atuais) == 0:
+        civis_atuais = [
+            {"nome": "Juliana Mendes Cardoso", "nome_guerra": "Cardoso", "identificador": "333.444.555-66", "tipo": "CIVIL", "posto_grad_cargo": "SPTF", "categoria": "Civil", "divisao": "DL", "secao": "DLCE", "tempo_comara_meses": 48},
+            {"nome": "Carlos Roberto Guimarães", "nome_guerra": "Guimarães", "identificador": "444.555.666-77", "tipo": "CIVIL", "posto_grad_cargo": "SPPF", "categoria": "Civil", "divisao": "DE", "secao": "DEPL", "tempo_comara_meses": 62},
+            {"nome": "Maria Aparecida dos Santos", "nome_guerra": "Aparecida", "identificador": "555.666.777-88", "tipo": "CIVIL", "posto_grad_cargo": "SPTF", "categoria": "Civil", "divisao": "DA", "secao": "DAPC", "tempo_comara_meses": 38},
+            {"nome": "Ana Cláudia Fontes", "nome_guerra": "Fontes", "identificador": "777.888.999-00", "tipo": "CIVIL", "posto_grad_cargo": "SPPF", "categoria": "Civil", "divisao": "DPC", "secao": "DPCI", "tempo_comara_meses": 84}
+        ]
+        
+    # Limpa tabela e insere o efetivo militar completo + servidores civis
+    c.execute("DELETE FROM efetivo")
+    
+    # Insere Civis
+    for civ in civis_atuais:
+        c.execute("""
+        INSERT INTO efetivo (nome, nome_guerra, identificador, tipo, posto_grad_cargo, categoria, divisao, secao, tempo_comara_meses, ativo)
+        VALUES (?, ?, ?, 'CIVIL', ?, 'Civil', ?, ?, ?, 1)
+        """, (civ["nome"], civ["nome_guerra"], civ["identificador"], civ["posto_grad_cargo"], civ["divisao"], civ["secao"], civ["tempo_comara_meses"]))
+        
+    # Insere Militares
+    for m in militares_processados:
+        c.execute("""
+        INSERT INTO efetivo (nome, nome_guerra, identificador, tipo, posto_grad_cargo, categoria, divisao, secao, tempo_comara_meses, ativo)
+        VALUES (?, ?, ?, 'MILITAR', ?, ?, ?, ?, ?, 1)
+        """, (m["nome"], m["guerra"], m["saram"], f"{m['posto']} {m['esp']}".strip(), m["categoria"], m["divisao"], m["secao"], m["tempo_meses"]))
+        
+    # 2. Configuração de Contas LDAP Principais
+    shash = hash_senha("comara")
+    agora = "2026-09-16T12:00:00"
+    
+    # Coronel Trigueiro - Presidente da COMARA / Comandante da OM
+    c.execute("""
+    INSERT OR REPLACE INTO usuarios_ldap (ldap_username, nome_completo, identificador, papel, divisao, secao, status, vinculado_por, vinculado_em, senha_hash, criado_em, ativo)
+    VALUES ('trigueiro.cmdt', 'Cel Av Antonio Carlos Neves Trigueiro', '3800000', 'CMDT_OM', 'VP', 'CMDO', 'ATIVO', 'admin.dpti', ?, ?, ?, 1)
+    """, (agora, shash, agora))
+    
+    # Manter compatibilidade com usuário de demonstração mendes.cmdt
+    c.execute("""
+    INSERT OR REPLACE INTO usuarios_ldap (ldap_username, nome_completo, identificador, papel, divisao, secao, status, vinculado_por, vinculado_em, senha_hash, criado_em, ativo)
+    VALUES ('mendes.cmdt', 'Cel Av Antonio Carlos Neves Trigueiro', '3800000', 'CMDT_OM', 'VP', 'CMDO', 'ATIVO', 'admin.dpti', ?, ?, ?, 1)
+    """, (agora, shash, agora))
+    
+    # Chefes de Divisão Oficiais
+    c.execute("""
+    INSERT OR REPLACE INTO usuarios_ldap (ldap_username, nome_completo, identificador, papel, divisao, secao, status, vinculado_por, vinculado_em, senha_hash, criado_em, ativo)
+    VALUES ('moreira.cde', 'Maj Eng Luís Mauro Moreira de Sá', '3800007', 'CHEFE_DIVISAO', 'DE', 'DEPJ', 'ATIVO', 'admin.dpti', ?, ?, ?, 1)
+    """, (agora, shash, agora))
+    
+    c.execute("""
+    INSERT OR REPLACE INTO usuarios_ldap (ldap_username, nome_completo, identificador, papel, divisao, secao, status, vinculado_por, vinculado_em, senha_hash, criado_em, ativo)
+    VALUES ('leitao.cdl', 'Ten Cel Int Antonio José de Jesus Belém Leitão Junior', '3800005', 'CHEFE_DIVISAO', 'DL', 'DLCP', 'ATIVO', 'admin.dpti', ?, ?, ?, 1)
+    """, (agora, shash, agora))
+
+    c.execute("""
+    INSERT OR REPLACE INTO usuarios_ldap (ldap_username, nome_completo, identificador, papel, divisao, secao, status, vinculado_por, vinculado_em, senha_hash, criado_em, ativo)
+    VALUES ('levy.cda', 'Ten Cel Av Adenirson Levy Santos da Cruz', '3800004', 'CHEFE_DIVISAO', 'DA', 'DASD', 'ATIVO', 'admin.dpti', ?, ?, ?, 1)
+    """, (agora, shash, agora))
+
+    # Chefe de Seção de Exemplo (Cap Eng Rios / 1T Anthony)
+    c.execute("""
+    INSERT OR REPLACE INTO usuarios_ldap (ldap_username, nome_completo, identificador, papel, divisao, secao, status, vinculado_por, vinculado_em, senha_hash, criado_em, ativo)
+    VALUES ('secao.depl', '1T Eng Anthony Belo Vasconcelos Santos', '3800018', 'CHEFE_SECAO', 'DE', 'DEPL', 'ATIVO', 'admin.dpti', ?, ?, ?, 1)
+    """, (agora, shash, agora))
+
+    # Eleitor de Exemplo (SO Guedes)
+    c.execute("""
+    INSERT OR REPLACE INTO usuarios_ldap (ldap_username, nome_completo, identificador, papel, divisao, secao, status, vinculado_por, vinculado_em, senha_hash, criado_em, ativo)
+    VALUES ('guedes.so', 'SO BCO Rosivaldo Guedes de Souza', '6000060', 'USUARIO_COMUM', 'DE', 'DELP', 'ATIVO', 'admin.dpti', ?, ?, ?, 1)
+    """, (agora, shash, agora))
+
+    # Usuário Pendente na DPTI para demonstração de liberação
+    c.execute("""
+    INSERT OR REPLACE INTO usuarios_ldap (ldap_username, nome_completo, identificador, papel, divisao, secao, status, vinculado_por, vinculado_em, senha_hash, criado_em, ativo)
+    VALUES ('novo.usuario', 'Sd Moreira Ramos', '7999888', 'USUARIO_COMUM', 'DA', 'DASD', 'PENDENTE_DPTI', NULL, NULL, ?, ?, 1)
+    """, (shash, agora))
+
+    # Reset de fases para inicializar na Fase 1
+    c.execute("DELETE FROM controle_fases")
+    c.execute("""
+    INSERT INTO controle_fases (fase_atual, iniciado_em, atualizado_em, atualizado_por)
+    VALUES ('FASE_1_SECAO', ?, ?, 'admin.dpti')
+    """, (agora, agora))
+
+    # Limpar votos e indicações para iniciar processo eleitoral limpo
+    c.execute("DELETE FROM indicacoes_fase1_secao")
+    c.execute("DELETE FROM indicacoes_fase2_divisao")
+    c.execute("DELETE FROM vetos_fase3")
+    c.execute("DELETE FROM votos_fase4")
+    c.execute("DELETE FROM eleitores_votaram")
+    c.execute("DELETE FROM decisao_fase5_comando")
+
+    conn.commit()
+    conn.close()
+    
+    print("Banco de dados SQLite atualizado com o efetivo oficial!")
+
+    # 3. Gerar Planilha Excel Oficial Completa
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Efetivo COMARA Oficial"
+    
+    # Cabeçalho estilizado
+    headers = ["Ordem", "Posto/Grad", "Especialidade", "Nome Completo", "Nome de Guerra", "SARAM / CPF", "Classe Eleitoral", "Divisão", "Seção", "Tempo COMARA (Meses)", "Telefone"]
+    ws.append(headers)
+    
+    header_fill = PatternFill(start_color="0B2240", end_color="0B2240", fill_type="solid")
+    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    
+    for col_idx in range(1, len(headers) + 1):
+        cell = ws.cell(row=1, column=col_idx)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        
+    # Linhas dos militares
+    row_idx = 2
+    for m in militares_processados:
+        ws.append([
+            m["ordem"],
+            m["posto"],
+            m["esp"],
+            m["nome"],
+            m["guerra"],
+            m["saram"],
+            m["categoria"],
+            m["divisao"],
+            m["secao"],
+            m["tempo_meses"],
+            m["contato"]
+        ])
+        row_idx += 1
+        
+    # Linhas dos servidores civis
+    for civ in civis_atuais:
+        ws.append([
+            "CIV",
+            civ["posto_grad_cargo"],
+            "CIVIL",
+            civ["nome"],
+            civ["nome_guerra"],
+            civ["identificador"],
+            "Civil",
+            civ["divisao"],
+            civ["secao"],
+            civ["tempo_comara_meses"],
+            "(91) 3204-9100"
+        ])
+        
+    # Ajuste de largura das colunas
+    for col in ws.columns:
+        max_len = max(len(str(cell.value or '')) for cell in col)
+        col_letter = openpyxl.utils.get_column_letter(col[0].column)
+        ws.column_dimensions[col_letter].width = max(max_len + 3, 12)
+        
+    excel_path = os.path.join(os.path.dirname(__file__), "data", "efetivo_comara_oficial.xlsx")
+    wb.save(excel_path)
+    print(f"Planilha Excel oficial gerada com sucesso em: {excel_path}")
+    print(f" -> Total de registros na planilha: {row_idx - 1} militares + {len(civis_atuais)} servidores civis.")
+
+if __name__ == "__main__":
+    importar()
