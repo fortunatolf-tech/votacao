@@ -112,8 +112,8 @@ document.addEventListener("DOMContentLoaded", () => {
   initEventosQuorum();
   initEventosAuditoria();
 
-  // Tenta login automático padrão como Administrador
-  loginAutomaticoPadrao();
+  // Verifica se já há sessão salva no navegador ou inicializa tela de login
+  verificarSessaoInicial();
 });
 
 // ==========================================
@@ -150,21 +150,22 @@ function abrirModalLogin() {
   const modal = document.getElementById("modal-auth");
   if (modal) {
     modal.style.display = "flex";
-    document.getElementById("login-ldap-feedback").innerHTML = "";
-    document.getElementById("login-ldap-user").focus();
+    const feedback = document.getElementById("login-ldap-feedback");
+    if (feedback) feedback.innerHTML = "";
+    const userInput = document.getElementById("login-ldap-user");
+    if (userInput) {
+      setTimeout(() => userInput.focus(), 80);
+    }
   }
 }
 
 function fecharModalLogin() {
   const modal = document.getElementById("modal-auth");
-  if (modal) modal.style.display = "none";
+  if (modal) {
+    modal.style.display = "none";
+  }
 }
-
-window.preencherLoginDemo = function(user, pass) {
-  document.getElementById("login-ldap-user").value = user;
-  document.getElementById("login-ldap-pass").value = pass;
-  document.getElementById("btn-submit-ldap").click();
-};
+window.fecharModalLogin = fecharModalLogin;
 
 function initEventosAuth() {
   // Login LDAP
@@ -179,18 +180,109 @@ function initEventosAuth() {
     formCad.addEventListener("submit", handleAutoCadastro);
   }
 
-  // Trocar usuário / Encerrar sessão
+  // Abrir modal ao clicar em Trocar Usuário ou Entrar no Sistema
   const btnTrocar = document.getElementById("btn-trocar-usuario");
   if (btnTrocar) {
-    btnTrocar.addEventListener("click", () => {
-      appState.token = null;
-      sessionStorage.removeItem("comara_token");
-      abrirModalLogin();
+    btnTrocar.addEventListener("click", abrirModalLogin);
+  }
+
+  // Sair do sistema (Logout explícito)
+  const btnLogout = document.getElementById("btn-logout-usuario");
+  if (btnLogout) {
+    btnLogout.addEventListener("click", logoutUsuario);
+  }
+
+  // Botões de fechar e cancelar o modal
+  const btnFecharModal = document.getElementById("btn-fechar-modal-auth");
+  if (btnFecharModal) {
+    btnFecharModal.addEventListener("click", fecharModalLogin);
+  }
+
+  const btnCancelarLogin = document.getElementById("btn-cancelar-modal-auth");
+  if (btnCancelarLogin) {
+    btnCancelarLogin.addEventListener("click", fecharModalLogin);
+  }
+
+  const btnCancelarCad = document.getElementById("btn-cancelar-modal-cad");
+  if (btnCancelarCad) {
+    btnCancelarCad.addEventListener("click", fecharModalLogin);
+  }
+
+  // Fechar ao clicar no backdrop (fora do card do modal)
+  const modalAuth = document.getElementById("modal-auth");
+  if (modalAuth) {
+    modalAuth.addEventListener("click", (e) => {
+      if (e.target === modalAuth) {
+        fecharModalLogin();
+      }
     });
   }
+
+  const modalDpti = document.getElementById("modal-dpti-liberar");
+  if (modalDpti) {
+    modalDpti.addEventListener("click", (e) => {
+      if (e.target === modalDpti) {
+        fecharModalDptiLiberar();
+      }
+    });
+  }
+
+  // Fechar com a tecla ESC
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      fecharModalLogin();
+      if (typeof fecharModalDptiLiberar === "function") {
+        fecharModalDptiLiberar();
+      }
+    }
+  });
 }
 
-async function loginAutomaticoPadrao() {
+function aplicarUsuarioDeslogado() {
+  appState.usuarioAtual = null;
+  appState.token = null;
+
+  const badgeRole = document.getElementById("user-role-badge");
+  if (badgeRole) {
+    badgeRole.textContent = "NÃO IDENTIFICADO";
+    badgeRole.className = "user-badge-role role-usuario";
+  }
+
+  const nameDisplay = document.getElementById("user-name-display");
+  if (nameDisplay) nameDisplay.textContent = "Visitante";
+
+  const unitDisplay = document.getElementById("user-unit-display");
+  if (unitDisplay) unitDisplay.textContent = "(Aguardando Login)";
+
+  const btnTrocar = document.getElementById("btn-trocar-usuario");
+  if (btnTrocar) {
+    btnTrocar.innerHTML = `<span>🔑</span> Entrar no Sistema`;
+    btnTrocar.title = "Clique para se autenticar com suas credenciais de rede LDAP";
+  }
+
+  const btnLogout = document.getElementById("btn-logout-usuario");
+  if (btnLogout) {
+    btnLogout.style.display = "none";
+  }
+
+  const ctrlBox = document.getElementById("controle-fase-admin-box");
+  if (ctrlBox) {
+    ctrlBox.style.display = "none";
+  }
+
+  configurarPermissoesAbas("VISITANTE");
+  carregarStatusFases();
+}
+
+function logoutUsuario() {
+  appState.token = null;
+  sessionStorage.removeItem("comara_token");
+  aplicarUsuarioDeslogado();
+  showToast("Sessão Encerrada", "Você saiu do sistema com sucesso.", "info", 3500);
+  abrirModalLogin();
+}
+
+async function verificarSessaoInicial() {
   const savedToken = sessionStorage.getItem("comara_token");
   if (savedToken) {
     try {
@@ -210,25 +302,9 @@ async function loginAutomaticoPadrao() {
     }
   }
 
-  try {
-    const res = await fetch("/api/auth/login-ldap", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ldap_username: "admin.dpti", password: "comara" })
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (data.token) {
-        appState.token = data.token;
-        sessionStorage.setItem("comara_token", data.token);
-      }
-      aplicarUsuarioLogado(data);
-    } else {
-      abrirModalLogin();
-    }
-  } catch (err) {
-    abrirModalLogin();
-  }
+  // Sem sessão ativa: inicializa estado deslogado e abre a tela de login
+  aplicarUsuarioDeslogado();
+  abrirModalLogin();
 }
 
 async function handleLoginLdap(e) {
@@ -272,6 +348,7 @@ async function handleLoginLdap(e) {
     }
     aplicarUsuarioLogado(data);
     fecharModalLogin();
+    showToast("Autenticado com Sucesso", `Bem-vindo(a), ${data.posto_grad_cargo || ''} ${data.nome_guerra || data.nome_completo}!`, "success", 4000);
   } catch (err) {
     feedback.innerHTML = `<div class="alert alert-danger" style="margin-top:0.75rem;"><span>⚠️</span> <div>${err.message}</div></div>`;
   } finally {
@@ -335,17 +412,37 @@ function aplicarUsuarioLogado(user) {
 
   // Atualizar cabeçalho
   const badgeRole = document.getElementById("user-role-badge");
-  badgeRole.textContent = user.papel;
-  badgeRole.className = "user-badge-role";
+  if (badgeRole) {
+    badgeRole.textContent = user.papel;
+    badgeRole.className = "user-badge-role";
 
-  if (user.papel === "ADMINISTRADOR") badgeRole.classList.add("role-admin");
-  else if (user.papel === "CMDT_OM") badgeRole.classList.add("role-cmdt");
-  else if (user.papel === "CHEFE_DIVISAO") badgeRole.classList.add("role-chefe-div");
-  else if (user.papel === "CHEFE_SECAO") badgeRole.classList.add("role-chefe-sec");
-  else badgeRole.classList.add("role-usuario");
+    if (user.papel === "ADMINISTRADOR") badgeRole.classList.add("role-admin");
+    else if (user.papel === "CMDT_OM") badgeRole.classList.add("role-cmdt");
+    else if (user.papel === "CHEFE_DIVISAO") badgeRole.classList.add("role-chefe-div");
+    else if (user.papel === "CHEFE_SECAO") badgeRole.classList.add("role-chefe-sec");
+    else badgeRole.classList.add("role-usuario");
+  }
 
-  document.getElementById("user-name-display").textContent = `${user.posto_grad_cargo || ''} ${user.nome_guerra || user.nome_completo}`;
-  document.getElementById("user-unit-display").textContent = `(${user.divisao || 'COMARA'}${user.secao ? ' / ' + user.secao : ''})`;
+  const nameDisplay = document.getElementById("user-name-display");
+  if (nameDisplay) {
+    nameDisplay.textContent = `${user.posto_grad_cargo || ''} ${user.nome_guerra || user.nome_completo}`.trim();
+  }
+
+  const unitDisplay = document.getElementById("user-unit-display");
+  if (unitDisplay) {
+    unitDisplay.textContent = `(${user.divisao || 'COMARA'}${user.secao ? ' / ' + user.secao : ''})`;
+  }
+
+  const btnTrocar = document.getElementById("btn-trocar-usuario");
+  if (btnTrocar) {
+    btnTrocar.innerHTML = `<span>🔄</span> Trocar Usuário`;
+    btnTrocar.title = "Alternar para outro usuário institucional";
+  }
+
+  const btnLogout = document.getElementById("btn-logout-usuario");
+  if (btnLogout) {
+    btnLogout.style.display = "inline-flex";
+  }
 
   // Visibilidade de controle de fases (Apenas Administrador e Comandante da OM)
   const ctrlBox = document.getElementById("controle-fase-admin-box");
@@ -392,41 +489,51 @@ function configurarPermissoesAbas(papel) {
 
   if (papel === "ADMINISTRADOR") {
     if (cardFilaDpti) cardFilaDpti.style.display = "block";
-    btnDpti.click();
+    if (btnDpti) btnDpti.click();
   } else if (papel === "CMDT_OM") {
     if (cardFilaDpti) cardFilaDpti.style.display = "none";
-    btnDpti.style.display = "none";
-    btnFase1.style.display = "none";
-    btnFase2.style.display = "none";
-    btnFase3.style.display = "none";
-    btnFase5.click();
+    if (btnDpti) btnDpti.style.display = "none";
+    if (btnFase1) btnFase1.style.display = "none";
+    if (btnFase2) btnFase2.style.display = "none";
+    if (btnFase3) btnFase3.style.display = "none";
+    if (btnFase5) btnFase5.click();
   } else if (papel === "CHEFE_DIVISAO") {
     if (cardFilaDpti) cardFilaDpti.style.display = "none";
-    btnDpti.style.display = "none";
-    btnFase1.style.display = "none";
-    btnFase5.style.display = "none";
-    btnAuditoria.style.display = "none";
-    btnFase2.click();
+    if (btnDpti) btnDpti.style.display = "none";
+    if (btnFase1) btnFase1.style.display = "none";
+    if (btnFase5) btnFase5.style.display = "none";
+    if (btnAuditoria) btnAuditoria.style.display = "none";
+    if (btnFase2) btnFase2.click();
   } else if (papel === "CHEFE_SECAO") {
     if (cardFilaDpti) cardFilaDpti.style.display = "none";
-    btnDpti.style.display = "none";
-    btnFase2.style.display = "none";
-    btnFase3.style.display = "none";
+    if (btnDpti) btnDpti.style.display = "none";
+    if (btnFase2) btnFase2.style.display = "none";
+    if (btnFase3) btnFase3.style.display = "none";
     if (btnQuorum) btnQuorum.style.display = "none";
-    btnFase5.style.display = "none";
-    btnAuditoria.style.display = "none";
-    btnFase1.click();
+    if (btnFase5) btnFase5.style.display = "none";
+    if (btnAuditoria) btnAuditoria.style.display = "none";
+    if (btnFase1) btnFase1.click();
+  } else if (papel === "VISITANTE") {
+    if (cardFilaDpti) cardFilaDpti.style.display = "none";
+    if (btnDpti) btnDpti.style.display = "none";
+    if (btnFase1) btnFase1.style.display = "none";
+    if (btnFase2) btnFase2.style.display = "none";
+    if (btnFase3) btnFase3.style.display = "none";
+    if (btnQuorum) btnQuorum.style.display = "none";
+    if (btnFase5) btnFase5.style.display = "none";
+    if (btnAuditoria) btnAuditoria.style.display = "none";
+    if (btnFase4) btnFase4.click();
   } else {
     // USUARIO_COMUM
     if (cardFilaDpti) cardFilaDpti.style.display = "none";
-    btnDpti.style.display = "none";
-    btnFase1.style.display = "none";
-    btnFase2.style.display = "none";
-    btnFase3.style.display = "none";
+    if (btnDpti) btnDpti.style.display = "none";
+    if (btnFase1) btnFase1.style.display = "none";
+    if (btnFase2) btnFase2.style.display = "none";
+    if (btnFase3) btnFase3.style.display = "none";
     if (btnQuorum) btnQuorum.style.display = "none";
-    btnFase5.style.display = "none";
-    btnAuditoria.style.display = "none";
-    btnFase4.click();
+    if (btnFase5) btnFase5.style.display = "none";
+    if (btnAuditoria) btnAuditoria.style.display = "none";
+    if (btnFase4) btnFase4.click();
   }
 }
 
@@ -437,11 +544,19 @@ function initNavegacaoAbas() {
   const tabs = document.querySelectorAll(".nav-tab-btn");
   tabs.forEach(tab => {
     tab.addEventListener("click", () => {
+      const targetId = tab.getAttribute("data-tab");
+
+      // Protege navegação para visitantes não identificados
+      if (!appState.usuarioAtual && targetId !== "tab-fase4") {
+        showToast("Identificação Necessária", "Efetue login com suas credenciais LDAP para acessar esta seção.", "info", 4000);
+        abrirModalLogin();
+        return;
+      }
+
       tabs.forEach(t => t.classList.remove("active"));
       document.querySelectorAll(".tab-pane").forEach(p => p.classList.remove("active"));
 
       tab.classList.add("active");
-      const targetId = tab.getAttribute("data-tab");
       const pane = document.getElementById(targetId);
       if (pane) pane.classList.add("active");
 

@@ -456,6 +456,7 @@ table.data-table tbody tr:hover { background-color: #f8fafc; }
 }
 
 .login-card {
+  position: relative;
   background: #ffffff;
   border-radius: 12px;
   max-width: 540px;
@@ -465,6 +466,33 @@ table.data-table tbody tr:hover { background-color: #f8fafc; }
   padding: 2rem;
   box-shadow: var(--shadow-lg);
   border-top: 5px solid var(--accent-gold);
+}
+
+.modal-close-btn {
+  position: absolute;
+  top: 0.85rem;
+  right: 1.1rem;
+  background: #f1f5f9;
+  border: 1px solid var(--border-color);
+  font-size: 1.5rem;
+  line-height: 1;
+  color: var(--text-secondary);
+  cursor: pointer;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  z-index: 10;
+}
+
+.modal-close-btn:hover {
+  background: #fee2e2;
+  color: #dc2626;
+  border-color: #fca5a5;
+  transform: scale(1.05);
 }
 
 .quick-user-btn {

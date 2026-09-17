@@ -13,6 +13,8 @@
   <!-- MODAL DE LOGIN / AUTO-CADASTRO -->
   <div id="modal-auth" class="modal-backdrop" style="display: none;">
     <div class="login-card">
+      <button type="button" class="modal-close-btn" id="btn-fechar-modal-auth" title="Fechar (ESC)">&times;</button>
+
       <div style="text-align: center; margin-bottom: 1.25rem;">
         <img src="assets/brasao_comara.png" alt="Brasão COMARA" style="width: 70px; height: auto; margin-bottom: 0.5rem;">
         <h2 style="font-size: 1.25rem; color: var(--primary-navy); font-weight: 800; text-transform: uppercase;">Portal Eleitoral COMARA</h2>
@@ -47,9 +49,14 @@
             <label class="form-label" for="login-ldap-pass">Senha:</label>
             <input type="password" id="login-ldap-pass" class="form-control" placeholder="Senha da rede" required>
           </div>
-          <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;" id="btn-submit-ldap">
-            <span>🔑</span> Entrar no Sistema
-          </button>
+          <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
+            <button type="button" class="btn btn-secondary" style="flex: 1;" id="btn-cancelar-modal-auth">
+              Cancelar
+            </button>
+            <button type="submit" class="btn btn-primary" style="flex: 2;" id="btn-submit-ldap">
+              <span>🔑</span> Entrar no Sistema
+            </button>
+          </div>
           <div id="login-ldap-feedback" style="margin-top: 0.75rem;"></div>
         </form>
       </div>
@@ -133,9 +140,14 @@
             </div>
           </div>
 
-          <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;">
-            <span>💾</span> Realizar Auto-Cadastro
-          </button>
+          <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
+            <button type="button" class="btn btn-secondary" style="flex: 1;" id="btn-cancelar-modal-cad">
+              Cancelar
+            </button>
+            <button type="submit" class="btn btn-primary" style="flex: 2;">
+              <span>💾</span> Realizar Auto-Cadastro
+            </button>
+          </div>
           <div id="auto-cadastro-feedback" style="margin-top: 0.75rem;"></div>
         </form>
       </div>
@@ -145,6 +157,7 @@
   <!-- MODAL DE LIBERAÇÃO PRESENCIAL NA DPTI (ADMINISTRADOR) -->
   <div id="modal-dpti-liberar" class="modal-backdrop" style="display: none;">
     <div class="login-card" style="max-width: 520px;">
+      <button type="button" class="modal-close-btn" onclick="fecharModalDptiLiberar()" title="Fechar (ESC)">&times;</button>
       <div style="text-align: center; margin-bottom: 1.25rem;">
         <span style="font-size: 2.5rem;">🛡️</span>
         <h2 style="font-size: 1.2rem; color: var(--primary-navy); font-weight: 800; text-transform: uppercase;">DPTI &bull; Liberação e Vínculo de Rede</h2>
@@ -220,15 +233,18 @@
       <!-- Barra do Usuário Autenticado -->
       <div class="header-user-bar" id="header-user-container">
         <div id="user-info-display" style="display: flex; align-items: center; gap: 0.6rem;">
-          <span id="user-role-badge" class="user-badge-role role-admin">ADMINISTRADOR</span>
-          <span id="user-name-display" style="font-size: 0.88rem; font-weight: 600;">Carregando...</span>
-          <span id="user-unit-display" style="font-size: 0.78rem; color: #cbd5e1;">(DPTI)</span>
+          <span id="user-role-badge" class="user-badge-role role-usuario">NÃO IDENTIFICADO</span>
+          <span id="user-name-display" style="font-size: 0.88rem; font-weight: 600;">Visitante</span>
+          <span id="user-unit-display" style="font-size: 0.78rem; color: #cbd5e1;">(Aguardando Login)</span>
         </div>
         <button type="button" class="btn btn-gold btn-sm" popovertarget="popover-guia-geral" style="padding: 0.25rem 0.65rem; font-size: 0.75rem;">
           <span>❓</span> Guia do Sistema
         </button>
         <button class="btn btn-secondary btn-sm" id="btn-trocar-usuario" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;">
-          Trocar Usuário
+          <span>🔑</span> Entrar no Sistema
+        </button>
+        <button class="btn btn-danger btn-sm" id="btn-logout-usuario" style="padding: 0.25rem 0.6rem; font-size: 0.75rem; display: none;">
+          <span>🚪</span> Sair
         </button>
       </div>
     </div>
