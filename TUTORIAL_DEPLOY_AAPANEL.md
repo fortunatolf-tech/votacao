@@ -37,7 +37,7 @@ Antes de iniciar, certifique-se de que o seu aaPanel possui os seguintes módulo
 4. No terminal do aaPanel (ou via SSH), execute:
    ```bash
    cd /www/wwwroot/
-   git clone https://github.com/SEU_USUARIO/SEU_REPOSITORIO.git padrao-comara
+   git clone https://github.com/fortunatolf-tech/votacao.git padrao-comara
    cd padrao-comara
    ```
    *(Ou envie o arquivo ZIP pelo gerenciador de arquivos do aaPanel e extraia dentro de `/www/wwwroot/padrao-comara`)*.
@@ -86,7 +86,7 @@ Se preferir fazer tudo pelo terminal do servidor, utilize o script automatizado 
 
 ```bash
 cd /www/wwwroot/
-git clone https://github.com/SEU_USUARIO/SEU_REPOSITORIO.git padrao-comara
+git clone https://github.com/fortunatolf-tech/votacao.git padrao-comara
 cd padrao-comara
 chmod +x deploy_aapanel.sh
 ./deploy_aapanel.sh
