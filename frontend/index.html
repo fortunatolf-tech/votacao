@@ -41,7 +41,7 @@
         <form id="form-login-ldap">
           <div class="form-group">
             <label class="form-label" for="login-ldap-user">Usuário de Rede (LDAP):</label>
-            <input type="text" id="login-ldap-user" class="form-control" placeholder="ex.: lima.eleitor, moreira.cde..." required autofocus>
+            <input type="text" id="login-ldap-user" class="form-control" placeholder="ex.: trigueiro.cmdt, moreira.cde, guedes.so..." required autofocus>
           </div>
           <div class="form-group">
             <label class="form-label" for="login-ldap-pass">Senha:</label>
@@ -53,17 +53,17 @@
           <div id="login-ldap-feedback" style="margin-top: 0.75rem;"></div>
         </form>
 
-        <!-- Seletor Rápido dos 5 Modificadores de Acesso -->
+        <!-- Seletor Rápido dos Perfis Oficiais de Acesso -->
         <div style="margin-top: 1.25rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
           <div style="font-size: 0.78rem; font-weight: 700; color: var(--primary-navy); margin-bottom: 0.5rem; text-transform: uppercase;">
-            Demonstração Rápida de Perfis (5 Modificadores de Acesso):
+            Perfis Oficiais Homologados (Atalhos de Acesso Rápido):
           </div>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem;">
             <button type="button" class="quick-user-btn" onclick="preencherLoginDemo('admin.dpti', 'comara')">
               <span>🛡️ <strong>Administrador</strong></span>
               <small style="color: #dc2626;">DPTI</small>
             </button>
-            <button type="button" class="quick-user-btn" onclick="preencherLoginDemo('mendes.cmdt', 'comara')">
+            <button type="button" class="quick-user-btn" onclick="preencherLoginDemo('trigueiro.cmdt', 'comara')">
               <span>👑 <strong>Presidente OM</strong></span>
               <small style="color: #d4af37;">Comando</small>
             </button>
@@ -71,17 +71,17 @@
               <span>⭐ <strong>Chefe Divisão</strong></span>
               <small style="color: #0284c7;">DE</small>
             </button>
+            <button type="button" class="quick-user-btn" onclick="preencherLoginDemo('leitao.cdl', 'comara')">
+              <span>⭐ <strong>Chefe Divisão</strong></span>
+              <small style="color: #0284c7;">DL</small>
+            </button>
             <button type="button" class="quick-user-btn" onclick="preencherLoginDemo('secao.depl', 'comara')">
               <span>🎖️ <strong>Chefe Seção</strong></span>
               <small style="color: #059669;">DEPL</small>
             </button>
-            <button type="button" class="quick-user-btn" onclick="preencherLoginDemo('lima.eleitor', 'comara')">
-              <span>🗳️ <strong>Usuário Comum</strong></span>
-              <small style="color: #475569;">Eleitor</small>
-            </button>
-            <button type="button" class="quick-user-btn" onclick="preencherLoginDemo('novo.usuario', 'comara')" style="border-color: #fca5a5;">
-              <span>⚠️ <strong>Pendente DPTI</strong></span>
-              <small style="color: #dc2626;">Bloqueio</small>
+            <button type="button" class="quick-user-btn" onclick="preencherLoginDemo('guedes.so', 'comara')">
+              <span>🗳️ <strong>Eleitor Ativo</strong></span>
+              <small style="color: #475569;">DELP</small>
             </button>
           </div>
         </div>

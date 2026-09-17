@@ -9,9 +9,9 @@ from database import get_db_connection, init_db, registrar_log, hash_senha
 
 # Divisões Oficiais RICA 21-209 / ROCA 21-55
 DIVISOES_OFICIAIS = [
-    {"sigla": "DE", "nome": "Divisão de Engenharia", "chefe_nome": "Ten Cel Eng Moreira", "chefe_saram_cpf": "3892145", "chefe_ldap": "moreira.cde"},
-    {"sigla": "DL", "nome": "Divisão de Logística", "chefe_nome": "Ten Cel Int Duarte", "chefe_saram_cpf": "4102938", "chefe_ldap": "duarte.cdl"},
-    {"sigla": "DA", "nome": "Divisão de Apoio", "chefe_nome": "Ten Cel Av Vasconcelos", "chefe_saram_cpf": "4210984", "chefe_ldap": "vasconcelos.cda"},
+    {"sigla": "DE", "nome": "Divisão de Engenharia", "chefe_nome": "Maj Eng Luís Mauro Moreira de Sá", "chefe_saram_cpf": "3800007", "chefe_ldap": "moreira.cde"},
+    {"sigla": "DL", "nome": "Divisão de Logística", "chefe_nome": "Ten Cel Int Antonio José de Jesus Belém Leitão Junior", "chefe_saram_cpf": "3800005", "chefe_ldap": "leitao.cdl"},
+    {"sigla": "DA", "nome": "Divisão de Apoio", "chefe_nome": "Ten Cel Av Adenirson Levy Santos da Cruz", "chefe_saram_cpf": "3800004", "chefe_ldap": "levy.cda"},
     {"sigla": "DPC", "nome": "Divisão de Planejamento e Coordenação", "chefe_nome": "Cel Av Siqueira", "chefe_saram_cpf": "3567812", "chefe_ldap": "siqueira.cdpc"},
     {"sigla": "DACO-MN", "nome": "Destacamento de Apoio da COMARA em Manaus", "chefe_nome": "Ten Cel Av Rocha", "chefe_saram_cpf": "3910293", "chefe_ldap": "rocha.cdaco"},
     {"sigla": "VP", "nome": "Vice-Presidência e Assessorias", "chefe_nome": "Cel Av Baptista", "chefe_saram_cpf": "3109283", "chefe_ldap": "baptista.vp"}
@@ -122,27 +122,23 @@ CONTAS_LDAP_INICIAIS = [
     # 1. ADMINISTRADOR
     {"ldap_username": "admin.dpti", "nome_completo": "Cap Eng Linhares", "identificador": "4509123", "papel": "ADMINISTRADOR", "divisao": "DPC", "secao": "DPTI", "status": "ATIVO", "vinculado_por": "SISTEMA", "senha": "comara"},
     # 2. CMDT_OM (Presidente da COMARA)
-    {"ldap_username": "trigueiro.cmdt", "nome_completo": "Cel Av Trigueiro (Presidente da COMARA)", "identificador": "1111111", "papel": "CMDT_OM", "divisao": "VP", "secao": "PR", "status": "ATIVO", "vinculado_por": "admin.dpti", "senha": "comara"},
-    {"ldap_username": "mendes.cmdt", "nome_completo": "Cel Av Mendes (Presidente da COMARA)", "identificador": "2987162", "papel": "CMDT_OM", "divisao": "VP", "secao": "PR", "status": "ATIVO", "vinculado_por": "admin.dpti", "senha": "comara"},
+    {"ldap_username": "trigueiro.cmdt", "nome_completo": "Cel Av Antonio Carlos Neves Trigueiro", "identificador": "3800000", "papel": "CMDT_OM", "divisao": "VP", "secao": "CMDO", "status": "ATIVO", "vinculado_por": "admin.dpti", "senha": "comara"},
     # 3. CHEFES DE DIVISÃO
-    {"ldap_username": "moreira.cde", "nome_completo": "Ten Cel Eng Moreira", "identificador": "3892145", "papel": "CHEFE_DIVISAO", "divisao": "DE", "secao": "DE", "status": "ATIVO", "vinculado_por": "admin.dpti", "senha": "comara"},
-    {"ldap_username": "duarte.cdl", "nome_completo": "Ten Cel Int Duarte", "identificador": "4102938", "papel": "CHEFE_DIVISAO", "divisao": "DL", "secao": "DL", "status": "ATIVO", "vinculado_por": "admin.dpti", "senha": "comara"},
-    {"ldap_username": "vasconcelos.cda", "nome_completo": "Ten Cel Av Vasconcelos", "identificador": "4210984", "papel": "CHEFE_DIVISAO", "divisao": "DA", "secao": "DA", "status": "ATIVO", "vinculado_por": "admin.dpti", "senha": "comara"},
+    {"ldap_username": "moreira.cde", "nome_completo": "Maj Eng Luís Mauro Moreira de Sá", "identificador": "3800007", "papel": "CHEFE_DIVISAO", "divisao": "DE", "secao": "DEPJ", "status": "ATIVO", "vinculado_por": "admin.dpti", "senha": "comara"},
+    {"ldap_username": "leitao.cdl", "nome_completo": "Ten Cel Int Antonio José de Jesus Belém Leitão Junior", "identificador": "3800005", "papel": "CHEFE_DIVISAO", "divisao": "DL", "secao": "DLCP", "status": "ATIVO", "vinculado_por": "admin.dpti", "senha": "comara"},
+    {"ldap_username": "levy.cda", "nome_completo": "Ten Cel Av Adenirson Levy Santos da Cruz", "identificador": "3800004", "papel": "CHEFE_DIVISAO", "divisao": "DA", "secao": "DASD", "status": "ATIVO", "vinculado_por": "admin.dpti", "senha": "comara"},
     {"ldap_username": "siqueira.cdpc", "nome_completo": "Cel Av Siqueira", "identificador": "3567812", "papel": "CHEFE_DIVISAO", "divisao": "DPC", "secao": "DPC", "status": "ATIVO", "vinculado_por": "admin.dpti", "senha": "comara"},
     {"ldap_username": "rocha.cdaco", "nome_completo": "Ten Cel Av Rocha", "identificador": "3910293", "papel": "CHEFE_DIVISAO", "divisao": "DACO-MN", "secao": "DACO-MN", "status": "ATIVO", "vinculado_por": "admin.dpti", "senha": "comara"},
     {"ldap_username": "baptista.vp", "nome_completo": "Cel Av Baptista", "identificador": "3109283", "papel": "CHEFE_DIVISAO", "divisao": "VP", "secao": "VP", "status": "ATIVO", "vinculado_por": "admin.dpti", "senha": "comara"},
-    # 4. CHEFES DE SEÇÃO
-    {"ldap_username": "secao.depl", "nome_completo": "Cap Eng Rios", "identificador": "4910293", "papel": "CHEFE_SECAO", "divisao": "DE", "secao": "DEPL", "status": "ATIVO", "vinculado_por": "admin.dpti", "senha": "comara"},
+    # 4. CHEFES DE SEÇÃO (OFICIAIS)
+    {"ldap_username": "secao.depl", "nome_completo": "1T Eng Anthony Belo Vasconcelos Santos", "identificador": "3800018", "papel": "CHEFE_SECAO", "divisao": "DE", "secao": "DEPL", "status": "ATIVO", "vinculado_por": "admin.dpti", "senha": "comara"},
     {"ldap_username": "secao.depj", "nome_completo": "Cap Eng Lacerda", "identificador": "4910294", "papel": "CHEFE_SECAO", "divisao": "DE", "secao": "DEPJ", "status": "ATIVO", "vinculado_por": "admin.dpti", "senha": "comara"},
     {"ldap_username": "secao.dapc", "nome_completo": "Cap Esp Silva", "identificador": "4321098", "papel": "CHEFE_SECAO", "divisao": "DA", "secao": "DAPC", "status": "ATIVO", "vinculado_por": "admin.dpti", "senha": "comara"},
     {"ldap_username": "secao.dapm", "nome_completo": "1T QOCon Ramos", "identificador": "4321099", "papel": "CHEFE_SECAO", "divisao": "DA", "secao": "DAPM", "status": "ATIVO", "vinculado_por": "admin.dpti", "senha": "comara"},
     {"ldap_username": "secao.dltr", "nome_completo": "Cap Esp Garcez", "identificador": "4810291", "papel": "CHEFE_SECAO", "divisao": "DL", "secao": "DLTR", "status": "ATIVO", "vinculado_por": "admin.dpti", "senha": "comara"},
     {"ldap_username": "secao.dpti", "nome_completo": "1S Macedo (Danilo Macedo)", "identificador": "6042341", "papel": "CHEFE_SECAO", "divisao": "DPC", "secao": "DPTI", "status": "ATIVO", "vinculado_por": "admin.dpti", "senha": "comara"},
-    # 5. USUÁRIOS COMUNS (Eleitores da OM)
-    {"ldap_username": "lima.eleitor", "nome_completo": "1S Lima (Carlos Eduardo Lima)", "identificador": "6012341", "papel": "USUARIO_COMUM", "divisao": "DE", "secao": "DEPL", "status": "ATIVO", "vinculado_por": "admin.dpti", "senha": "comara"},
-    {"ldap_username": "cardoso.civil", "nome_completo": "Juliana Mendes Cardoso", "identificador": "333.444.555-66", "papel": "USUARIO_COMUM", "divisao": "DL", "secao": "DLCE", "status": "ATIVO", "vinculado_por": "admin.dpti", "senha": "comara"},
-    # 6. USUÁRIO AUTO-CADASTRADO PENDENTE (Demonstração da fila DPTI)
-    {"ldap_username": "novo.usuario", "nome_completo": "Sd Moreira Ramos", "identificador": "7999888", "papel": "USUARIO_COMUM", "divisao": "DA", "secao": "DASD", "status": "PENDENTE_DPTI", "vinculado_por": None, "senha": "comara"}
+    # 5. USUÁRIO COMUM (ELEITOR OFICIAL)
+    {"ldap_username": "guedes.so", "nome_completo": "SO BCO Rosivaldo Guedes de Souza", "identificador": "6000060", "papel": "USUARIO_COMUM", "divisao": "DE", "secao": "DELP", "status": "ATIVO", "vinculado_por": "admin.dpti", "senha": "comara"}
 ]
 
 def seed_database():

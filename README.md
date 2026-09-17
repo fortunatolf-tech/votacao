@@ -96,11 +96,11 @@ docker-compose up -d --build
 | :--- | :--- | :--- | :--- |
 | **Administrador Geral** | `admin.dpti` | `comara` | Administrador DPTI |
 | **Presidente da COMARA** | `trigueiro.cmdt` | `comara` | Cel Av Trigueiro |
-| **Chefe Divisão Engenharia** | `moreira.cde` | `comara` | Ten Cel Eng Moreira |
-| **Chefe Divisão Logística** | `duarte.cdl` | `comara` | Ten Cel Int Duarte |
-| **Chefe Divisão Apoio** | `vasconcelos.cda` | `comara` | Ten Cel Av Vasconcelos |
-| **Chefe Seção DEPL** | `secao.depl` | `comara` | Cap Eng Rios |
-| **Eleitor Comum** | `lima.eleitor` | `comara` | 1S Lima |
+| **Chefe Divisão Engenharia (DE)** | `moreira.cde` | `comara` | Maj Eng Luís Mauro |
+| **Chefe Divisão Logística (DL)** | `leitao.cdl` | `comara` | Ten Cel Int Leitão Junior |
+| **Chefe Divisão Apoio (DA)** | `levy.cda` | `comara` | Ten Cel Av Levy |
+| **Chefe Seção DEPL** | `secao.depl` | `comara` | 1T Eng Anthony |
+| **Eleitor Ativo** | `guedes.so` | `comara` | SO BCO Rosivaldo Guedes |
 
 ---
 
