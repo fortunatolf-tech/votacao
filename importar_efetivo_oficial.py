@@ -295,7 +295,7 @@ def determinar_lotacao(posto, esp, nome_guerra):
     
     # Comandante / Presidente COMARA
     if p == "CL" or "TRIGUEIRO" in nome_guerra.upper():
-        return "VP", "CMDO"
+        return "PRESIDENCIA", "CMDO"
     if p in ["OSO", "OD", "OSD"]:
         return "DA", "DASD"
         
@@ -333,7 +333,7 @@ def determinar_lotacao(posto, esp, nome_guerra):
     # Apoio e Recursos Humanos (DA)
     if e in ["ADM", "SAD", "SNT", "STB", "STP", "SJU", "SVA", "BLG", "PSO", "BLM", "NE"]:
         if e in ["SJU", "SVA"]:
-            return "VP", "AJUR"
+            return "PRESIDENCIA", "AJUR"
         elif e in ["SDRH", "SAD", "ADM"]:
             return "DA", "DAPM"
         elif e in ["SNT", "BLG", "PSO"]:
@@ -438,55 +438,15 @@ def importar():
         VALUES (?, ?, ?, 'MILITAR', ?, ?, ?, ?, ?, 1)
         """, (m["nome"], m["guerra"], m["saram"], f"{m['posto']} {m['esp']}".strip(), m["categoria"], m["divisao"], m["secao"], m["tempo_meses"]))
         
-    # 2. Configuração de Contas LDAP Principais
+    # 2. Configuração da Conta Exclusiva do Administrador da DPTI
     shash = hash_senha("comara")
     agora = "2026-09-16T12:00:00"
     
-    # Coronel Trigueiro - Presidente da COMARA / Comandante da OM
     c.execute("""
     INSERT OR REPLACE INTO usuarios_ldap (ldap_username, nome_completo, identificador, papel, divisao, secao, status, vinculado_por, vinculado_em, senha_hash, criado_em, ativo)
-    VALUES ('trigueiro.cmdt', 'Cel Av Antonio Carlos Neves Trigueiro', '3800000', 'CMDT_OM', 'VP', 'CMDO', 'ATIVO', 'admin.dpti', ?, ?, ?, 1)
+    VALUES ('admin.dpti', 'Cap Eng Linhares', '4509123', 'ADMINISTRADOR', 'DPC', 'DPTI', 'ATIVO', 'SISTEMA', ?, ?, ?, 1)
     """, (agora, shash, agora))
-    
-    # Manter compatibilidade com usuário de demonstração mendes.cmdt
-    c.execute("""
-    INSERT OR REPLACE INTO usuarios_ldap (ldap_username, nome_completo, identificador, papel, divisao, secao, status, vinculado_por, vinculado_em, senha_hash, criado_em, ativo)
-    VALUES ('mendes.cmdt', 'Cel Av Antonio Carlos Neves Trigueiro', '3800000', 'CMDT_OM', 'VP', 'CMDO', 'ATIVO', 'admin.dpti', ?, ?, ?, 1)
-    """, (agora, shash, agora))
-    
-    # Chefes de Divisão Oficiais
-    c.execute("""
-    INSERT OR REPLACE INTO usuarios_ldap (ldap_username, nome_completo, identificador, papel, divisao, secao, status, vinculado_por, vinculado_em, senha_hash, criado_em, ativo)
-    VALUES ('moreira.cde', 'Maj Eng Luís Mauro Moreira de Sá', '3800007', 'CHEFE_DIVISAO', 'DE', 'DEPJ', 'ATIVO', 'admin.dpti', ?, ?, ?, 1)
-    """, (agora, shash, agora))
-    
-    c.execute("""
-    INSERT OR REPLACE INTO usuarios_ldap (ldap_username, nome_completo, identificador, papel, divisao, secao, status, vinculado_por, vinculado_em, senha_hash, criado_em, ativo)
-    VALUES ('leitao.cdl', 'Ten Cel Int Antonio José de Jesus Belém Leitão Junior', '3800005', 'CHEFE_DIVISAO', 'DL', 'DLCP', 'ATIVO', 'admin.dpti', ?, ?, ?, 1)
-    """, (agora, shash, agora))
-
-    c.execute("""
-    INSERT OR REPLACE INTO usuarios_ldap (ldap_username, nome_completo, identificador, papel, divisao, secao, status, vinculado_por, vinculado_em, senha_hash, criado_em, ativo)
-    VALUES ('levy.cda', 'Ten Cel Av Adenirson Levy Santos da Cruz', '3800004', 'CHEFE_DIVISAO', 'DA', 'DASD', 'ATIVO', 'admin.dpti', ?, ?, ?, 1)
-    """, (agora, shash, agora))
-
-    # Chefe de Seção de Exemplo (Cap Eng Rios / 1T Anthony)
-    c.execute("""
-    INSERT OR REPLACE INTO usuarios_ldap (ldap_username, nome_completo, identificador, papel, divisao, secao, status, vinculado_por, vinculado_em, senha_hash, criado_em, ativo)
-    VALUES ('secao.depl', '1T Eng Anthony Belo Vasconcelos Santos', '3800018', 'CHEFE_SECAO', 'DE', 'DEPL', 'ATIVO', 'admin.dpti', ?, ?, ?, 1)
-    """, (agora, shash, agora))
-
-    # Eleitor de Exemplo (SO Guedes)
-    c.execute("""
-    INSERT OR REPLACE INTO usuarios_ldap (ldap_username, nome_completo, identificador, papel, divisao, secao, status, vinculado_por, vinculado_em, senha_hash, criado_em, ativo)
-    VALUES ('guedes.so', 'SO BCO Rosivaldo Guedes de Souza', '6000060', 'USUARIO_COMUM', 'DE', 'DELP', 'ATIVO', 'admin.dpti', ?, ?, ?, 1)
-    """, (agora, shash, agora))
-
-    # Usuário Pendente na DPTI para demonstração de liberação
-    c.execute("""
-    INSERT OR REPLACE INTO usuarios_ldap (ldap_username, nome_completo, identificador, papel, divisao, secao, status, vinculado_por, vinculado_em, senha_hash, criado_em, ativo)
-    VALUES ('novo.usuario', 'Sd Moreira Ramos', '7999888', 'USUARIO_COMUM', 'DA', 'DASD', 'PENDENTE_DPTI', NULL, NULL, ?, ?, 1)
-    """, (shash, agora))
+    c.execute("DELETE FROM usuarios_ldap WHERE ldap_username != 'admin.dpti'")
 
     # Reset de fases para inicializar na Fase 1
     c.execute("DELETE FROM controle_fases")

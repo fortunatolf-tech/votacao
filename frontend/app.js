@@ -3,8 +3,39 @@
  * Implementação integral das 5 fases eleitorais, fila DPTI e autenticação LDAP.
  */
 
+// ==========================================
+// INTERCEPTOR DE REQUISIÇÕES (JWT BEARER TOKEN)
+// ==========================================
+(function() {
+  const _origFetch = window.fetch;
+  window.fetch = async function(url, opts = {}) {
+    opts = opts || {};
+    const token = (window.appState && window.appState.token) || sessionStorage.getItem("comara_token");
+    if (token && typeof url === "string" && (url.startsWith("/api/") || url.startsWith("api/"))) {
+      if (!opts.headers) {
+        opts.headers = { "Authorization": `Bearer ${token}` };
+      } else if (opts.headers instanceof Headers) {
+        if (!opts.headers.has("Authorization")) {
+          opts.headers.set("Authorization", `Bearer ${token}`);
+        }
+      } else if (Array.isArray(opts.headers)) {
+        const hasAuth = opts.headers.some(([k]) => k.toLowerCase() === "authorization");
+        if (!hasAuth) {
+          opts.headers.push(["Authorization", `Bearer ${token}`]);
+        }
+      } else if (typeof opts.headers === "object") {
+        if (!opts.headers["Authorization"] && !opts.headers["authorization"]) {
+          opts.headers["Authorization"] = `Bearer ${token}`;
+        }
+      }
+    }
+    return _origFetch.call(this, url, opts);
+  };
+})();
+
 const appState = {
   usuarioAtual: null,
+  token: null,
   faseAtual: "FASE_1_SECAO",
   faseInfo: null,
   eleitorFase4: null,
@@ -18,7 +49,12 @@ const appState = {
     Pracas: [],
     Civil: []
   },
-  efetivoGeral: []
+  efetivoGeral: [],
+  dadosQuorum: null,
+  filtroQuorumStatus: "todos",
+  filtroQuorumDivisao: "",
+  filtroQuorumCategoria: "",
+  filtroQuorumBusca: ""
 };
 
 // ==========================================
@@ -73,6 +109,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initEventosDPTI();
   initEventosFasesControle();
   initEventosFase4();
+  initEventosQuorum();
   initEventosAuditoria();
 
   // Tenta login automático padrão como Administrador
@@ -142,14 +179,37 @@ function initEventosAuth() {
     formCad.addEventListener("submit", handleAutoCadastro);
   }
 
-  // Trocar usuário
+  // Trocar usuário / Encerrar sessão
   const btnTrocar = document.getElementById("btn-trocar-usuario");
   if (btnTrocar) {
-    btnTrocar.addEventListener("click", abrirModalLogin);
+    btnTrocar.addEventListener("click", () => {
+      appState.token = null;
+      sessionStorage.removeItem("comara_token");
+      abrirModalLogin();
+    });
   }
 }
 
 async function loginAutomaticoPadrao() {
+  const savedToken = sessionStorage.getItem("comara_token");
+  if (savedToken) {
+    try {
+      const res = await fetch("/api/auth/me", {
+        headers: { "Authorization": `Bearer ${savedToken}` }
+      });
+      if (res.ok) {
+        const user = await res.json();
+        appState.token = savedToken;
+        aplicarUsuarioLogado(user);
+        return;
+      } else {
+        sessionStorage.removeItem("comara_token");
+      }
+    } catch (err) {
+      sessionStorage.removeItem("comara_token");
+    }
+  }
+
   try {
     const res = await fetch("/api/auth/login-ldap", {
       method: "POST",
@@ -158,6 +218,10 @@ async function loginAutomaticoPadrao() {
     });
     if (res.ok) {
       const data = await res.json();
+      if (data.token) {
+        appState.token = data.token;
+        sessionStorage.setItem("comara_token", data.token);
+      }
       aplicarUsuarioLogado(data);
     } else {
       abrirModalLogin();
@@ -202,6 +266,10 @@ async function handleLoginLdap(e) {
       throw new Error(data.detail || "Usuário ou senha incorretos.");
     }
 
+    if (data.token) {
+      appState.token = data.token;
+      sessionStorage.setItem("comara_token", data.token);
+    }
     aplicarUsuarioLogado(data);
     fecharModalLogin();
   } catch (err) {
@@ -294,6 +362,11 @@ function aplicarUsuarioLogado(user) {
   // Configurar abas e redirecionar conforme modificador de acesso
   configurarPermissoesAbas(user.papel);
   carregarStatusFases();
+
+  // Carrega quórum apenas se o perfil tiver autorização expressa
+  if (["ADMINISTRADOR", "CMDT_OM", "CHEFE_DIVISAO"].includes(user.papel)) {
+    carregarPainelVotantes();
+  }
 }
 
 function configurarPermissoesAbas(papel) {
@@ -302,15 +375,20 @@ function configurarPermissoesAbas(papel) {
   const btnFase2 = document.getElementById("nav-btn-fase2");
   const btnFase3 = document.getElementById("nav-btn-fase3");
   const btnFase4 = document.getElementById("nav-btn-fase4");
+  const btnQuorum = document.getElementById("nav-btn-quorum");
   const btnFase5 = document.getElementById("nav-btn-fase5");
   const btnAuditoria = document.getElementById("nav-btn-auditoria");
 
   // Restaura visibilidade inicial
-  [btnDpti, btnFase1, btnFase2, btnFase3, btnFase4, btnFase5, btnAuditoria].forEach(b => {
+  [btnDpti, btnFase1, btnFase2, btnFase3, btnFase4, btnQuorum, btnFase5, btnAuditoria].forEach(b => {
     if (b) b.style.display = "inline-flex";
   });
 
   const cardFilaDpti = document.getElementById("card-fila-dpti");
+  const podeVerQuorum = ["ADMINISTRADOR", "CMDT_OM", "CHEFE_DIVISAO"].includes(papel);
+  if (btnQuorum) {
+    btnQuorum.style.display = podeVerQuorum ? "inline-flex" : "none";
+  }
 
   if (papel === "ADMINISTRADOR") {
     if (cardFilaDpti) cardFilaDpti.style.display = "block";
@@ -334,6 +412,7 @@ function configurarPermissoesAbas(papel) {
     btnDpti.style.display = "none";
     btnFase2.style.display = "none";
     btnFase3.style.display = "none";
+    if (btnQuorum) btnQuorum.style.display = "none";
     btnFase5.style.display = "none";
     btnAuditoria.style.display = "none";
     btnFase1.click();
@@ -344,6 +423,7 @@ function configurarPermissoesAbas(papel) {
     btnFase1.style.display = "none";
     btnFase2.style.display = "none";
     btnFase3.style.display = "none";
+    if (btnQuorum) btnQuorum.style.display = "none";
     btnFase5.style.display = "none";
     btnAuditoria.style.display = "none";
     btnFase4.click();
@@ -377,6 +457,13 @@ function initNavegacaoAbas() {
         carregarFase3();
       } else if (targetId === "tab-fase4") {
         carregarCabineFase4();
+      } else if (targetId === "tab-quorum") {
+        const papel = appState.usuarioAtual ? appState.usuarioAtual.papel : null;
+        if (!["ADMINISTRADOR", "CMDT_OM", "CHEFE_DIVISAO"].includes(papel)) {
+          showToast("Acesso Restrito", "Apenas o Presidente, Administrador e Chefes de Divisão podem acessar o Quórum.", "warning", 5000);
+          return;
+        }
+        carregarPainelVotantes();
       } else if (targetId === "tab-fase5") {
         carregarFase5();
       } else if (targetId === "tab-auditoria") {
@@ -691,10 +778,23 @@ async function carregarFase1() {
               <div>
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
                   <span class="badge ${cat.badge}">${escapeHtml(m.posto_grad_cargo)}</span>
-                  ${isIndicado ? '<span class="badge badge-homologado">⭐ INDICADO</span>' : ''}
+                  ${isIndicado ? '<span class="badge badge-homologado">⭐ INDICADO OFICIAL</span>' : ''}
                 </div>
-                <div style="font-weight: 700; font-size: 1rem; color: var(--primary-navy);">${escapeHtml(m.nome_guerra)}</div>
-                <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.4rem;">${escapeHtml(m.nome)}</div>
+                ${isIndicado ? `
+                  <div style="display: flex; gap: 0.75rem; align-items: center; margin-bottom: 0.5rem;">
+                    <div class="candidate-photo-wrapper" style="width: 65px; height: 85px;">
+                      <img src="/api/foto/${encodeURIComponent(m.identificador || m.id)}?nome=${encodeURIComponent(m.nome_guerra)}&tipo=${encodeURIComponent(m.tipo || '')}" 
+                           alt="${escapeHtml(m.nome_guerra)}" class="candidate-photo" loading="lazy">
+                    </div>
+                    <div style="flex: 1; min-width: 0;">
+                      <div style="font-weight: 700; font-size: 1rem; color: var(--primary-navy);">${escapeHtml(m.nome_guerra)}</div>
+                      <div style="font-size: 0.8rem; color: var(--text-secondary);">${escapeHtml(m.nome)}</div>
+                    </div>
+                  </div>
+                ` : `
+                  <div style="font-weight: 700; font-size: 1rem; color: var(--primary-navy);">${escapeHtml(m.nome_guerra)}</div>
+                  <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.4rem;">${escapeHtml(m.nome)}</div>
+                `}
                 <div style="font-size: 0.78rem; color: var(--text-muted);">
                   Identificador: <code>${escapeHtml(m.identificador)}</code><br>
                   Tempo COMARA: ${m.tempo_comara_meses} meses
@@ -802,10 +902,14 @@ async function carregarFase2() {
 
         indicados.forEach(cand => {
           const isChecked = selecionados.includes(cand.id);
+          const fotoUrl = `/api/foto/${encodeURIComponent(cand.identificador || cand.id)}?nome=${encodeURIComponent(cand.nome_guerra)}&tipo=${encodeURIComponent(cand.tipo || '')}`;
           html += `
-            <label class="candidate-card" style="cursor: pointer; display: flex; gap: 0.75rem; align-items: flex-start;">
-              <input type="checkbox" name="fase2_check_${cat.id}" value="${cand.id}" ${isChecked ? 'checked' : ''} style="margin-top: 0.25rem; width: 1.2rem; height: 1.2rem;" onchange="limitarSelecaoFase2(this, '${cat.id}')">
-              <div style="flex: 1;">
+            <label class="candidate-card ${isChecked ? 'selected-candidate-card' : ''}" style="cursor: pointer; display: flex; gap: 0.75rem; align-items: flex-start;">
+              <input type="checkbox" name="fase2_check_${cat.id}" value="${cand.id}" ${isChecked ? 'checked' : ''} style="margin-top: 0.35rem; width: 1.25rem; height: 1.25rem;" onchange="limitarSelecaoFase2(this, '${cat.id}')">
+              <div class="candidate-photo-wrapper" style="width: 70px; height: 95px;">
+                <img src="${fotoUrl}" alt="${escapeHtml(cand.nome_guerra)}" class="candidate-photo" loading="lazy">
+              </div>
+              <div style="flex: 1; min-width: 0;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem;">
                   <span class="badge ${cat.badge}">${escapeHtml(cand.posto_grad_cargo)}</span>
                   <span class="badge badge-civil">Seção ${escapeHtml(cand.secao_origem)}</span>
@@ -813,7 +917,7 @@ async function carregarFase2() {
                 <div style="font-weight: 700; font-size: 1rem; color: var(--primary-navy);">${escapeHtml(cand.nome_guerra)}</div>
                 <div style="font-size: 0.8rem; color: var(--text-secondary);">${escapeHtml(cand.nome)}</div>
                 <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.3rem;">
-                  Tempo COMARA: ${cand.tempo_comara_meses} meses
+                  SARAM/ID: <code>${escapeHtml(cand.identificador || '--')}</code> &bull; ${cand.tempo_comara_meses} meses
                 </div>
               </div>
             </label>
@@ -938,15 +1042,24 @@ async function carregarFase3() {
 
           const meuVoto = cand.meu_voto; // 1 = Veto, 0 = Não veta, null = pendente
 
+          const fotoUrl = `/api/foto/${encodeURIComponent(cand.identificador || cand.id)}?nome=${encodeURIComponent(cand.nome_guerra)}&tipo=${encodeURIComponent(cand.tipo || '')}`;
           html += `
             <div class="candidate-card" style="display:flex; flex-direction:column; justify-content:space-between; border-color: ${meuVoto === 1 ? '#fca5a5' : (meuVoto === 0 ? '#86efac' : 'var(--border-color)')};">
               <div>
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.4rem;">
-                  <span class="badge ${cat.badge}">${escapeHtml(cand.posto_grad_cargo)}</span>
-                  <span class="badge badge-civil">Divisão ${escapeHtml(cand.divisao)}</span>
+                <div style="display: flex; gap: 0.75rem; align-items: flex-start; margin-bottom: 0.5rem;">
+                  <div class="candidate-photo-wrapper" style="width: 70px; height: 95px;">
+                    <img src="${fotoUrl}" alt="${escapeHtml(cand.nome_guerra)}" class="candidate-photo" loading="lazy">
+                  </div>
+                  <div style="flex: 1; min-width: 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.25rem;">
+                      <span class="badge ${cat.badge}">${escapeHtml(cand.posto_grad_cargo)}</span>
+                      <span class="badge badge-civil">Div. ${escapeHtml(cand.divisao)}</span>
+                    </div>
+                    <div style="font-weight: 700; font-size: 1rem; color: var(--primary-navy);">${escapeHtml(cand.nome_guerra)}</div>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.2rem;">${escapeHtml(cand.nome)}</div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted);">SARAM/ID: <code>${escapeHtml(cand.identificador || '--')}</code></div>
+                  </div>
                 </div>
-                <div style="font-weight: 700; font-size: 1rem; color: var(--primary-navy);">${escapeHtml(cand.nome_guerra)}</div>
-                <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.5rem;">${escapeHtml(cand.nome)}</div>
                 
                 <div style="background:#f8fafc; padding: 0.6rem; border-radius: var(--radius); border: 1px solid var(--border-color); font-size: 0.8rem; margin-bottom: 0.75rem;">
                   <div style="display: flex; justify-content: space-between; margin-bottom: 0.2rem;">
@@ -1244,18 +1357,29 @@ function renderizarCartoesCedulaClique(catId, containerId, badgeClass) {
 
   container.innerHTML = candidatos.map(c => {
     const isSelecionado = (votoAtual === c.id);
+    const fotoUrl = `/api/foto/${encodeURIComponent(c.identificador || c.id)}?nome=${encodeURIComponent(c.nome_guerra)}&tipo=${encodeURIComponent(c.tipo || '')}`;
     return `
       <div class="candidate-card ${isSelecionado ? 'selected-candidate-card' : ''}" id="card-cand-${catId}-${c.id}" 
            style="cursor: pointer; transition: all 0.2s ease; border: 2px solid ${isSelecionado ? 'var(--primary-blue)' : 'var(--border-color)'}; background: ${isSelecionado ? '#f0f7ff' : 'var(--bg-card)'};" 
            onclick="selecionarCandidatoClique('${catId}', ${c.id})">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-          <span class="badge ${badgeClass}">${escapeHtml(c.posto_grad_cargo)}</span>
-          <span class="badge badge-civil">Divisão ${escapeHtml(c.divisao)}</span>
+        <div class="candidate-card-content">
+          <div class="candidate-photo-wrapper">
+            <img src="${fotoUrl}" alt="${escapeHtml(c.nome_guerra)}" class="candidate-photo" loading="lazy">
+          </div>
+          <div class="candidate-card-info">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; gap: 0.3rem;">
+              <span class="badge ${badgeClass}">${escapeHtml(c.posto_grad_cargo)}</span>
+              <span class="badge badge-civil">Div. ${escapeHtml(c.divisao)}</span>
+            </div>
+            <div style="font-weight: 700; font-size: 1.05rem; color: var(--primary-navy); margin-bottom: 0.15rem;">${escapeHtml(c.nome_guerra)}</div>
+            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.35rem;">${escapeHtml(c.nome)}</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.4;">
+              SARAM/ID: <code>${escapeHtml(c.identificador || '--')}</code><br>
+              Seção: ${escapeHtml(c.secao || '--')} &bull; ${c.tempo_comara_meses} meses
+            </div>
+          </div>
         </div>
-        <div style="font-weight: 700; font-size: 1.05rem; color: var(--primary-navy); margin-bottom: 0.2rem;">${escapeHtml(c.nome_guerra)}</div>
-        <div style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 0.5rem;">${escapeHtml(c.nome)}</div>
-        <div style="font-size: 0.75rem; color: var(--text-muted);">Tempo COMARA: ${c.tempo_comara_meses} meses</div>
-        <div id="check-icon-${catId}-${c.id}" style="margin-top: 0.75rem; text-align: center; font-size: 0.85rem; font-weight: 700; color: ${isSelecionado ? 'var(--primary-blue)' : 'var(--text-muted)'};">
+        <div id="check-icon-${catId}-${c.id}" style="margin-top: 0.75rem; text-align: center; font-size: 0.85rem; font-weight: 700; color: ${isSelecionado ? 'var(--primary-blue)' : 'var(--text-muted)'}; padding-top: 0.5rem; border-top: 1px dashed var(--border-color);">
           ${isSelecionado ? '🔵 <strong>VOTO SELECIONADO</strong>' : '⚪ Clique para Escolher'}
         </div>
       </div>
@@ -1443,6 +1567,7 @@ async function handleSubmeterVotoFase4(e) {
 
     document.getElementById("fase4-box-cedula").style.display = "none";
     document.getElementById("fase4-box-comprovante").style.display = "block";
+    carregarPainelVotantes();
 
   } catch (err) {
     showToast("Não Foi Possível Votar", err.message, "error", 7000);
@@ -1487,7 +1612,274 @@ function resetCabineVotacaoFase4() {
 }
 
 // ==========================================
-// ABA 6: FASE 5 - DECISÃO DO PRESIDENTE DA COMARA
+// ABA 6: PAINEL DE QUÓRUM E ACOMPANHAMENTO DO EFETIVO
+// ==========================================
+
+async function carregarPainelVotantes() {
+  const user = appState.usuarioAtual;
+  const papel = user ? user.papel : null;
+  const podeVerQuorum = ["ADMINISTRADOR", "CMDT_OM", "CHEFE_DIVISAO"].includes(papel);
+
+  if (!podeVerQuorum) {
+    const pane = document.getElementById("tab-quorum");
+    if (pane) {
+      pane.innerHTML = `
+        <div class="card" style="margin-top: 1rem; border-left: 5px solid #dc2626;">
+          <div class="card-header">
+            <h2 class="card-title" style="color: #dc2626;">🔒 Acesso Restrito ao Quórum</h2>
+          </div>
+          <div style="font-size: 0.92rem; color: var(--text-secondary); line-height: 1.6; padding: 0.5rem 0;">
+            Apenas o <strong>Presidente da COMARA</strong>, o <strong>Administrador</strong> e os <strong>Chefes de Divisão</strong> possuem autorização regulamentar para visualizar as métricas de quórum e a listagem de integrantes que já votaram.
+          </div>
+        </div>
+      `;
+    }
+    return;
+  }
+
+  try {
+    const url = user && user.ldap_username 
+      ? `/api/fase4/painel-votantes?ldap_username=${encodeURIComponent(user.ldap_username)}`
+      : `/api/fase4/painel-votantes`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      if (res.status === 403) {
+        showToast("Acesso Restrito", "Apenas o Presidente, Administrador e Chefes de Divisão podem acessar o Quórum.", "error", 5000);
+        return;
+      }
+      throw new Error("Falha ao consultar painel de votantes.");
+    }
+    const data = await res.json();
+    appState.dadosQuorum = data;
+
+    const resumo = data.resumo || {};
+    
+    // Atualizar Contadores e Percentuais Principais
+    const elTotal = document.getElementById("quorum-total-efetivo");
+    const elVotaram = document.getElementById("quorum-total-votaram");
+    const elPctVotaram = document.getElementById("quorum-pct-votaram");
+    const elPendentes = document.getElementById("quorum-total-pendentes");
+    const elPctPendentes = document.getElementById("quorum-pct-pendentes");
+    const elProgBar = document.getElementById("quorum-progress-bar");
+    const elProgText = document.getElementById("quorum-progress-text");
+    const elBadgeNav = document.getElementById("nav-quorum-badge");
+
+    if (elTotal) elTotal.textContent = `${resumo.total_efetivo || 0} integrantes`;
+    if (elVotaram) elVotaram.textContent = resumo.total_votaram || 0;
+    if (elPctVotaram) elPctVotaram.textContent = `(${resumo.percentual_votaram || 0}%)`;
+    if (elPendentes) elPendentes.textContent = resumo.total_pendentes || 0;
+    if (elPctPendentes) elPctPendentes.textContent = `(${resumo.percentual_pendentes || 0}%)`;
+
+    const pct = resumo.percentual_votaram || 0;
+    if (elProgBar) {
+      elProgBar.style.width = `${pct}%`;
+      elProgBar.textContent = `${pct}%`;
+    }
+    if (elProgText) {
+      elProgText.textContent = `${pct}% Quórum`;
+    }
+
+    if (elBadgeNav) {
+      elBadgeNav.textContent = `${pct}%`;
+      elBadgeNav.className = `badge ${pct >= 70 ? 'badge-homologado' : (pct >= 30 ? 'badge-primary' : 'badge-warning')}`;
+    }
+
+    // Atualizar cards de divisão
+    const divContainer = document.getElementById("quorum-divisoes-container");
+    if (divContainer && resumo.por_divisao) {
+      divContainer.innerHTML = resumo.por_divisao.map(d => {
+        const isAlto = d.percentual >= 70;
+        return `
+          <div class="quorum-division-card">
+            <div class="quorum-division-title">
+              <span>Divisão ${escapeHtml(d.divisao)}</span>
+              <span style="font-size: 0.82rem; color: ${isAlto ? '#059669' : 'var(--primary-blue)'};">${d.percentual}%</span>
+            </div>
+            <div style="font-size: 0.74rem; color: var(--text-muted); display: flex; justify-content: space-between;">
+              <span>${d.votaram} de ${d.total} votaram</span>
+              <span>${d.total - d.votaram} pendentes</span>
+            </div>
+            <div class="mini-bar-track">
+              <div class="mini-bar-fill" style="width: ${d.percentual}%; background: ${isAlto ? '#10b981' : 'var(--primary-blue)'};"></div>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    // Atualizar contadores nos botões de filtro
+    const cTodos = document.getElementById("count-filtro-todos");
+    const cVotou = document.getElementById("count-filtro-votou");
+    const cPendente = document.getElementById("count-filtro-pendente");
+    if (cTodos) cTodos.textContent = resumo.total_efetivo || 0;
+    if (cVotou) cVotou.textContent = resumo.total_votaram || 0;
+    if (cPendente) cPendente.textContent = resumo.total_pendentes || 0;
+
+    renderTabelaQuorum();
+  } catch (err) {
+    console.error("Erro ao carregar quórum de votação:", err);
+  }
+}
+
+function renderTabelaQuorum() {
+  const corpo = document.getElementById("tabela-corpo-quorum");
+  if (!corpo || !appState.dadosQuorum) return;
+
+  const todos = appState.dadosQuorum.eleitores || [];
+  const statusFiltro = appState.filtroQuorumStatus;
+  const divisaoFiltro = (appState.filtroQuorumDivisao || "").toUpperCase();
+  const categoriaFiltro = (appState.filtroQuorumCategoria || "").toUpperCase();
+  const termoBusca = (appState.filtroQuorumBusca || "").trim().toLowerCase();
+
+  const filtrados = todos.filter(e => {
+    // Filtro por status do voto
+    if (statusFiltro === "votou" && !e.votou) return false;
+    if (statusFiltro === "pendente" && e.votou) return false;
+
+    // Filtro por divisão
+    if (divisaoFiltro && (e.divisao || "").toUpperCase() !== divisaoFiltro) return false;
+
+    // Filtro por categoria
+    if (categoriaFiltro && (e.categoria || "").toUpperCase() !== categoriaFiltro) return false;
+
+    // Filtro de busca por texto
+    if (termoBusca) {
+      const haystack = `${e.nome} ${e.nome_guerra} ${e.identificador} ${e.posto_grad_cargo} ${e.divisao} ${e.secao}`.toLowerCase();
+      if (!haystack.includes(termoBusca)) return false;
+    }
+
+    return true;
+  });
+
+  if (filtrados.length === 0) {
+    corpo.innerHTML = `
+      <tr>
+        <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">
+          <span>🔍</span> Nenhum integrante localizado com os filtros selecionados.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  corpo.innerHTML = filtrados.map(e => {
+    const badgeCat = e.categoria === "Graduados" ? "badge-graduados" : (e.categoria === "Pracas" ? "badge-pracas" : "badge-civil");
+    const dataFormatada = e.data_hora_voto ? new Date(e.data_hora_voto).toLocaleString('pt-BR') : "--";
+
+    return `
+      <tr style="${e.votou ? 'background: #f0fdf4;' : ''}">
+        <td><span class="badge ${badgeCat}">${escapeHtml(e.posto_grad_cargo)}</span></td>
+        <td><strong>${escapeHtml(e.nome_guerra)}</strong></td>
+        <td style="font-size: 0.85rem;">${escapeHtml(e.nome)}</td>
+        <td><code>${escapeHtml(e.identificador)}</code></td>
+        <td><strong>${escapeHtml(e.divisao)}</strong> &bull; ${escapeHtml(e.secao)}</td>
+        <td><span class="badge badge-civil" style="font-size: 0.75rem;">${escapeHtml(e.categoria)}</span></td>
+        <td style="text-align: center;">
+          ${e.votou 
+            ? '<span class="badge-status-votou">🟢 VOTOU</span>' 
+            : '<span class="badge-status-pendente">🟡 PENDENTE</span>'}
+        </td>
+        <td style="font-size: 0.78rem; color: var(--text-secondary);">${dataFormatada}</td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function exportarQuorumCSV() {
+  if (!appState.dadosQuorum || !appState.dadosQuorum.eleitores) {
+    showToast("Exportação Indisponível", "Carregue o painel antes de exportar.", "warning");
+    return;
+  }
+
+  const eleitores = appState.dadosQuorum.eleitores;
+  let csv = "\uFEFF"; // BOM UTF-8 para Excel em português
+  csv += "Posto/Graduação;Nome de Guerra;Nome Completo;Identificador;Divisão;Seção;Classe;Status do Voto;Data/Hora do Voto\n";
+
+  eleitores.forEach(e => {
+    const dataHora = e.data_hora_voto ? new Date(e.data_hora_voto).toLocaleString('pt-BR') : "Pendente";
+    const status = e.votou ? "VOTOU" : "PENDENTE";
+    const linha = [
+      `"${(e.posto_grad_cargo || '').replace(/"/g, '""')}"`,
+      `"${(e.nome_guerra || '').replace(/"/g, '""')}"`,
+      `"${(e.nome || '').replace(/"/g, '""')}"`,
+      `"${(e.identificador || '').replace(/"/g, '""')}"`,
+      `"${(e.divisao || '').replace(/"/g, '""')}"`,
+      `"${(e.secao || '').replace(/"/g, '""')}"`,
+      `"${(e.categoria || '').replace(/"/g, '""')}"`,
+      `"${status}"`,
+      `"${dataHora}"`
+    ].join(";");
+    csv += linha + "\n";
+  });
+
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", `quorum_votacao_comara_${new Date().toISOString().slice(0, 10)}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+
+  showToast("Relatório Exportado", "Arquivo CSV oficial gerado com sucesso.", "success");
+}
+
+function initEventosQuorum() {
+  const btnAtualizar = document.getElementById("btn-atualizar-quorum");
+  if (btnAtualizar) {
+    btnAtualizar.addEventListener("click", () => {
+      carregarPainelVotantes();
+      showToast("Quórum Atualizado", "Dados de votação sincronizados com o banco de dados.", "info");
+    });
+  }
+
+  const btnExportar = document.getElementById("btn-exportar-quorum-csv");
+  if (btnExportar) {
+    btnExportar.addEventListener("click", exportarQuorumCSV);
+  }
+
+  const inputBusca = document.getElementById("filtro-busca-quorum");
+  if (inputBusca) {
+    inputBusca.addEventListener("input", (e) => {
+      appState.filtroQuorumBusca = e.target.value;
+      renderTabelaQuorum();
+    });
+  }
+
+  const selectDiv = document.getElementById("filtro-divisao-quorum");
+  if (selectDiv) {
+    selectDiv.addEventListener("change", (e) => {
+      appState.filtroQuorumDivisao = e.target.value;
+      renderTabelaQuorum();
+    });
+  }
+
+  const selectCat = document.getElementById("filtro-categoria-quorum");
+  if (selectCat) {
+    selectCat.addEventListener("change", (e) => {
+      appState.filtroQuorumCategoria = e.target.value;
+      renderTabelaQuorum();
+    });
+  }
+
+  const btnStatusTodos = document.getElementById("btn-filtro-status-todos");
+  const btnStatusVotou = document.getElementById("btn-filtro-status-votou");
+  const btnStatusPendente = document.getElementById("btn-filtro-status-pendente");
+
+  const botoesStatus = [btnStatusTodos, btnStatusVotou, btnStatusPendente].filter(Boolean);
+  botoesStatus.forEach(btn => {
+    btn.addEventListener("click", () => {
+      botoesStatus.forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      appState.filtroQuorumStatus = btn.getAttribute("data-filter-status") || "todos";
+      renderTabelaQuorum();
+    });
+  });
+}
+
+// ==========================================
+// ABA 7: FASE 5 - DECISÃO DO PRESIDENTE DA COMARA
 // ==========================================
 async function carregarFase5() {
   const container = document.getElementById("container-fase5-decisoes");
@@ -1584,12 +1976,19 @@ async function carregarFase5() {
               <span class="badge ${isHomologado ? 'badge-homologado' : 'badge-warning'}">${decisao.acao_comando}</span>
             </div>
 
-            <p style="font-size: 0.95rem; margin-bottom: 0.5rem;">
-              <strong>Ganhador Oficial:</strong> ${escapeHtml(decisao.vencedor_posto)} ${escapeHtml(decisao.vencedor_nome_guerra)}
-            </p>
-            <p style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
-              <strong>Despacho do Presidente da COMARA:</strong> "${escapeHtml(decisao.despacho || 'Sem despacho adicional.')}"
-            </p>
+            <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 0.75rem;">
+              <div class="candidate-photo-wrapper" style="width: 75px; height: 100px;">
+                <img src="/api/foto/${encodeURIComponent(decisao.candidato_final_id)}?nome=${encodeURIComponent(decisao.vencedor_nome_guerra)}" class="candidate-photo" alt="Vencedor" loading="lazy">
+              </div>
+              <div style="flex: 1;">
+                <p style="font-size: 1.05rem; margin-bottom: 0.35rem;">
+                  <strong>Ganhador Oficial:</strong> ${escapeHtml(decisao.vencedor_posto)} ${escapeHtml(decisao.vencedor_nome_guerra)}
+                </p>
+                <p style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 0;">
+                  <strong>Despacho do Presidente da COMARA:</strong> "${escapeHtml(decisao.despacho || 'Sem despacho adicional.')}"
+                </p>
+              </div>
+            </div>
             <div style="font-size: 0.78rem; color: var(--text-muted); border-top: 1px dashed var(--border-color); padding-top: 0.5rem; display: flex; justify-content: space-between; flex-wrap: wrap;">
               <span>Assinado por: <strong>${escapeHtml(decisao.comandante_nome)}</strong> (${escapeHtml(decisao.comandante_saram)})</span>
               <span>Assinatura Digital SHA-256: <code>${escapeHtml(decisao.assinatura_digital_hash ? decisao.assinatura_digital_hash.substring(0, 16) : '--')}...</code></span>
@@ -1709,52 +2108,12 @@ window.handleSalvarDecisaoComandante = async function(e, categoria, maisVotadoId
 };
 
 // ==========================================
-// ABA 7: AUDITORIA & TESTES
+// ABA 7: AUDITORIA DO SISTEMA
 // ==========================================
 function initEventosAuditoria() {
-  const btnTestes = document.getElementById("btn-executar-testes");
-  if (btnTestes) {
-    btnTestes.addEventListener("click", handleExecutarTestes);
-  }
-
   const btnLogs = document.getElementById("btn-atualizar-logs");
   if (btnLogs) {
     btnLogs.addEventListener("click", carregarLogsAuditoria);
-  }
-}
-
-async function handleExecutarTestes() {
-  const container = document.getElementById("resultado-testes-container");
-  const btn = document.getElementById("btn-executar-testes");
-  btn.disabled = true;
-  btn.innerHTML = "<span>⏳</span> Executando testes...";
-  container.innerHTML = `<div class="alert alert-info">Executando suíte de testes de integridade das 5 fases...</div>`;
-
-  try {
-    const res = await fetch("/api/testes/executar", { method: "POST" });
-    const data = await res.json();
-
-    const isSuccess = data.sucesso;
-    container.innerHTML = `
-      <div class="alert ${isSuccess ? 'alert-success' : 'alert-danger'}" style="margin-bottom: 1rem;">
-        <span style="font-size: 1.5rem;">${isSuccess ? '✅' : '❌'}</span>
-        <div>
-          <strong>${isSuccess ? 'TODOS OS TESTES PASSARAM COM SUCESSO!' : 'FALHA NOS TESTES'}</strong><br>
-          Total: ${data.total_testes} testes | Erros: ${data.erros} | Falhas: ${data.falhas} | Duração: ${data.tempo_execucao}s
-        </div>
-      </div>
-      <div style="background: #1e293b; color: #f8fafc; padding: 0.9rem; border-radius: var(--radius); font-family: monospace; font-size: 0.78rem; max-height: 250px; overflow-y: auto;">
-        ${escapeHtml(data.saida || "Execução concluída sem mensagens.")}
-      </div>
-    `;
-    showToast(isSuccess ? "Suíte de Testes Aprovada!" : "Falha nos Testes", `Total: ${data.total_testes} testes | Erros: ${data.erros} | Falhas: ${data.falhas}`, isSuccess ? "success" : "error", 5000);
-    carregarLogsAuditoria();
-  } catch (err) {
-    container.innerHTML = `<div class="alert alert-danger"><span>⚠️</span> <div>Falha ao executar testes: ${err.message}</div></div>`;
-    showToast("Erro ao Executar Testes", err.message, "error", 5000);
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = `<span>▶️</span> Executar Suíte de Testes`;
   }
 }
 

@@ -784,3 +784,248 @@ footer.military-footer {
   box-shadow: 0 0 0 3px rgba(0, 79, 159, 0.25) !important;
 }
 
+/* ==========================================================================
+   FOTOS DOS CANDIDATOS INDICADOS (SIGPES / OFICIAL FAB)
+   ========================================================================== */
+.candidate-photo-wrapper {
+  width: 90px;
+  height: 120px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: #f1f5f9;
+  border: 2px solid #cbd5e1;
+  box-shadow: 0 2px 6px rgba(0, 40, 85, 0.08);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.candidate-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.candidate-card-content {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.candidate-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .candidate-card-content {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  .candidate-photo-wrapper {
+    width: 100px;
+    height: 133px;
+    margin-bottom: 0.5rem;
+  }
+}
+
+/* ==========================================================================
+   PAINEL DE QUÓRUM ELEITORAL E ACOMPANHAMENTO DO EFETIVO
+   ========================================================================== */
+.quorum-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.quorum-kpi-card {
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+  position: relative;
+  overflow: hidden;
+}
+
+.quorum-kpi-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+}
+
+.quorum-kpi-card.kpi-total::before { background: var(--primary-blue); }
+.quorum-kpi-card.kpi-votou::before { background: #10b981; }
+.quorum-kpi-card.kpi-pendente::before { background: #f59e0b; }
+
+.quorum-kpi-val {
+  font-size: 1.85rem;
+  font-weight: 800;
+  line-height: 1.2;
+  margin-bottom: 0.25rem;
+}
+
+.kpi-total .quorum-kpi-val { color: var(--primary-navy); }
+.kpi-votou .quorum-kpi-val { color: #059669; }
+.kpi-pendente .quorum-kpi-val { color: #d97706; }
+
+.quorum-kpi-sub {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.quorum-progress-card {
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+}
+
+.quorum-progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.quorum-bar-track {
+  height: 24px;
+  background: #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+}
+
+.quorum-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #004f9f 0%, #10b981 100%);
+  border-radius: 12px;
+  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 8px;
+  color: #ffffff;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.quorum-division-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.quorum-division-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-sm);
+  padding: 0.75rem;
+}
+
+.quorum-division-title {
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: var(--primary-navy);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.4rem;
+}
+
+.mini-bar-track {
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 0.35rem;
+}
+
+.mini-bar-fill {
+  height: 100%;
+  background: var(--primary-blue);
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+
+/* Badges de Status de Votação */
+.badge-status-votou {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #86efac;
+  font-weight: 700;
+  padding: 0.25rem 0.65rem;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+}
+
+.badge-status-pendente {
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fcd34d;
+  font-weight: 700;
+  padding: 0.25rem 0.65rem;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+}
+
+/* Barra de Filtros e Busca do Quórum */
+.quorum-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.quorum-filter-buttons {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.quorum-filter-btn {
+  padding: 0.4rem 0.85rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: #ffffff;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.quorum-filter-btn:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.quorum-filter-btn.active {
+  background: var(--primary-navy);
+  color: #ffffff;
+  border-color: var(--primary-navy);
+}
+

@@ -52,39 +52,6 @@
           </button>
           <div id="login-ldap-feedback" style="margin-top: 0.75rem;"></div>
         </form>
-
-        <!-- Seletor Rápido dos Perfis Oficiais de Acesso -->
-        <div style="margin-top: 1.25rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
-          <div style="font-size: 0.78rem; font-weight: 700; color: var(--primary-navy); margin-bottom: 0.5rem; text-transform: uppercase;">
-            Perfis Oficiais Homologados (Atalhos de Acesso Rápido):
-          </div>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem;">
-            <button type="button" class="quick-user-btn" onclick="preencherLoginDemo('admin.dpti', 'comara')">
-              <span>🛡️ <strong>Administrador</strong></span>
-              <small style="color: #dc2626;">DPTI</small>
-            </button>
-            <button type="button" class="quick-user-btn" onclick="preencherLoginDemo('trigueiro.cmdt', 'comara')">
-              <span>👑 <strong>Presidente OM</strong></span>
-              <small style="color: #d4af37;">Comando</small>
-            </button>
-            <button type="button" class="quick-user-btn" onclick="preencherLoginDemo('moreira.cde', 'comara')">
-              <span>⭐ <strong>Chefe Divisão</strong></span>
-              <small style="color: #0284c7;">DE</small>
-            </button>
-            <button type="button" class="quick-user-btn" onclick="preencherLoginDemo('leitao.cdl', 'comara')">
-              <span>⭐ <strong>Chefe Divisão</strong></span>
-              <small style="color: #0284c7;">DL</small>
-            </button>
-            <button type="button" class="quick-user-btn" onclick="preencherLoginDemo('secao.depl', 'comara')">
-              <span>🎖️ <strong>Chefe Seção</strong></span>
-              <small style="color: #059669;">DEPL</small>
-            </button>
-            <button type="button" class="quick-user-btn" onclick="preencherLoginDemo('guedes.so', 'comara')">
-              <span>🗳️ <strong>Eleitor Ativo</strong></span>
-              <small style="color: #475569;">DELP</small>
-            </button>
-          </div>
-        </div>
       </div>
 
       <!-- Formulário 2: Auto-Cadastro de Efetivo -->
@@ -146,7 +113,7 @@
                 <option value="DA">DA - Apoio</option>
                 <option value="DPC">DPC - Planejamento</option>
                 <option value="DACO-MN">DACO-MN - Manaus</option>
-                <option value="VP">VP - Vice-Presidência</option>
+                <option value="PRESIDENCIA">Presidência</option>
               </select>
             </div>
             <div class="form-group">
@@ -219,7 +186,7 @@
               <option value="DA">DA - Apoio</option>
               <option value="DPC">DPC - Planejamento</option>
               <option value="DACO-MN">DACO-MN - Manaus</option>
-              <option value="VP">VP - Vice-Presidência</option>
+              <option value="PRESIDENCIA">Presidência</option>
             </select>
           </div>
           <div class="form-group">
@@ -321,11 +288,15 @@
       <button class="nav-tab-btn" data-tab="tab-fase4" id="nav-btn-fase4">
         <span>🗳️</span> 5. Fase 4: Votação Geral por Clique
       </button>
+      <button class="nav-tab-btn" data-tab="tab-quorum" id="nav-btn-quorum">
+        <span>📊</span> 6. Quórum & Quem Votou
+        <span id="nav-quorum-badge" class="badge badge-warning" style="font-size: 0.72rem; margin-left: 0.35rem; padding: 0.15rem 0.45rem;">0%</span>
+      </button>
       <button class="nav-tab-btn" data-tab="tab-fase5" id="nav-btn-fase5">
-        <span>👑</span> 6. Fase 5: Decisão da Presidência
+        <span>👑</span> 7. Fase 5: Decisão da Presidência
       </button>
       <button class="nav-tab-btn" data-tab="tab-auditoria" id="nav-btn-auditoria">
-        <span>🔒</span> 7. Auditoria & Testes
+        <span>🔒</span> 8. Auditoria do Sistema
       </button>
     </div>
   </nav>
@@ -384,7 +355,7 @@
               <option value="DA">DA - Apoio</option>
               <option value="DPC">DPC - Planejamento</option>
               <option value="DACO-MN">DACO-MN - Manaus</option>
-              <option value="VP">VP - Vice-Presidência</option>
+              <option value="PRESIDENCIA">Presidência</option>
             </select>
             <select id="filtro-tabela-categoria" class="form-control" style="width: auto;">
               <option value="">Todas as Classes</option>
@@ -639,7 +610,134 @@
       </div>
     </section>
 
-    <!-- ABA 6: FASE 5 - DECISÃO DO PRESIDENTE DA COMARA -->
+    <!-- ABA 6: QUÓRUM & QUEM VOTOU -->
+    <section id="tab-quorum" class="tab-pane">
+      <div class="card" style="border-top: 5px solid var(--primary-blue);">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">📊 Quórum de Participação e Acompanhamento do Efetivo</h2>
+            <p class="card-subtitle">Auditoria em tempo real de presença eleitoral: saiba quem já votou, quem ainda está pendente e o percentual de quórum por divisão.</p>
+          </div>
+          <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+            <button class="btn btn-secondary btn-sm" id="btn-atualizar-quorum">
+              <span>🔄</span> Atualizar Dados
+            </button>
+            <button class="btn btn-gold btn-sm" id="btn-exportar-quorum-csv">
+              <span>📥</span> Exportar Lista (CSV)
+            </button>
+          </div>
+        </div>
+
+        <!-- Indicadores Principais (KPIs) -->
+        <div class="quorum-kpi-grid">
+          <div class="quorum-kpi-card kpi-total">
+            <div class="quorum-kpi-val" id="quorum-total-efetivo">0</div>
+            <div class="quorum-kpi-sub">Total do Efetivo Habilitado (Militares e Civis)</div>
+          </div>
+          <div class="quorum-kpi-card kpi-votou">
+            <div class="quorum-kpi-val">
+              <span id="quorum-total-votaram">0</span>
+              <small style="font-size: 1.1rem; font-weight: 600;" id="quorum-pct-votaram">(0.0%)</small>
+            </div>
+            <div class="quorum-kpi-sub">Votos Computados (Presença Confirmada)</div>
+          </div>
+          <div class="quorum-kpi-card kpi-pendente">
+            <div class="quorum-kpi-val">
+              <span id="quorum-total-pendentes">0</span>
+              <small style="font-size: 1.1rem; font-weight: 600;" id="quorum-pct-pendentes">(0.0%)</small>
+            </div>
+            <div class="quorum-kpi-sub">Eleitores com Voto Pendente</div>
+          </div>
+        </div>
+
+        <!-- Barra Geral de Progresso do Quórum -->
+        <div class="quorum-progress-card">
+          <div class="quorum-progress-header">
+            <div>
+              <strong style="color: var(--primary-navy); font-size: 1rem;">Progresso Geral da Participação</strong>
+              <div style="font-size: 0.8rem; color: var(--text-secondary);">Percentual de votantes sobre o efetivo total da COMARA</div>
+            </div>
+            <div style="font-size: 1.3rem; font-weight: 800; color: var(--primary-blue);" id="quorum-progress-text">0.0%</div>
+          </div>
+          <div class="quorum-bar-track">
+            <div class="quorum-bar-fill" id="quorum-progress-bar" style="width: 0%;">0%</div>
+          </div>
+
+          <!-- Cards de Quórum por Divisão -->
+          <div style="margin-top: 1.25rem;">
+            <div style="font-size: 0.82rem; font-weight: 700; color: var(--primary-navy); text-transform: uppercase; margin-bottom: 0.5rem;">
+              Participação por Divisão Oficial:
+            </div>
+            <div class="quorum-division-grid" id="quorum-divisoes-container">
+              <!-- Renderizado dinamicamente via JS -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Barra de Filtros e Busca do Efetivo -->
+        <div class="quorum-toolbar">
+          <div style="flex: 1; min-width: 260px;">
+            <input type="text" id="filtro-busca-quorum" class="form-control" placeholder="🔍 Buscar por Nome de Guerra, Nome Completo, SARAM ou CPF...">
+          </div>
+          <div class="quorum-filter-buttons">
+            <button type="button" class="quorum-filter-btn active" data-filter-status="todos" id="btn-filtro-status-todos">
+              Todos (<span id="count-filtro-todos">0</span>)
+            </button>
+            <button type="button" class="quorum-filter-btn" data-filter-status="votou" id="btn-filtro-status-votou">
+              🟢 Já Votaram (<span id="count-filtro-votou">0</span>)
+            </button>
+            <button type="button" class="quorum-filter-btn" data-filter-status="pendente" id="btn-filtro-status-pendente">
+              🟡 Pendentes (<span id="count-filtro-pendente">0</span>)
+            </button>
+          </div>
+          <div style="display: flex; gap: 0.5rem;">
+            <select id="filtro-divisao-quorum" class="form-control" style="width: auto; font-size: 0.82rem;">
+              <option value="">Todas as Divisões</option>
+              <option value="DE">DE (Engenharia)</option>
+              <option value="DL">DL (Logística)</option>
+              <option value="DA">DA (Apoio)</option>
+              <option value="DPC">DPC (Planejamento)</option>
+              <option value="DACO-MN">DACO-MN</option>
+              <option value="PRESIDENCIA">Presidência</option>
+            </select>
+            <select id="filtro-categoria-quorum" class="form-control" style="width: auto; font-size: 0.82rem;">
+              <option value="">Todas as Classes</option>
+              <option value="Graduados">Graduados</option>
+              <option value="Pracas">Praças</option>
+              <option value="Civil">Servidores Civis</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Tabela do Efetivo e Status Eleitoral -->
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width: 120px;">Posto / Grad</th>
+                <th>Nome de Guerra</th>
+                <th>Nome Completo</th>
+                <th style="width: 130px;">Identificador</th>
+                <th style="width: 130px;">Lotação</th>
+                <th style="width: 110px;">Classe</th>
+                <th style="width: 140px; text-align: center;">Status do Voto</th>
+                <th style="width: 150px;">Data / Hora</th>
+              </tr>
+            </thead>
+            <tbody id="tabela-corpo-quorum">
+              <!-- Renderizado dinamicamente -->
+            </tbody>
+          </table>
+        </div>
+
+        <div style="margin-top: 1rem; font-size: 0.78rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.4rem;">
+          <span>🔒</span>
+          <em>Garantia Constitucional de Sigilo Eleitoral: Esta lista registra única e exclusivamente a presença no pleito para auditoria do quórum regulamentar. O voto individual na cédula é matematicamente desvinculado e anônimo.</em>
+        </div>
+      </div>
+    </section>
+
+    <!-- ABA 7: FASE 5 - DECISÃO DO PRESIDENTE DA COMARA -->
     <section id="tab-fase5" class="tab-pane">
       <div class="card" style="border-top: 5px solid var(--accent-gold);">
         <div class="card-header">
@@ -670,36 +768,19 @@
       </div>
     </section>
 
-    <!-- ABA 7: AUDITORIA & TESTES -->
+    <!-- ABA 7: AUDITORIA DO SISTEMA -->
     <section id="tab-auditoria" class="tab-pane">
-      <div class="grid-2">
-        <div class="card">
-          <div class="card-header">
-            <div>
-              <h2 class="card-title">🧪 Validação Algorítmica e Testes</h2>
-              <p class="card-subtitle">Execução da suíte de testes do novo fluxo em 5 fases</p>
-            </div>
-            <button class="btn btn-primary btn-sm" id="btn-executar-testes">
-              <span>▶️</span> Executar Suíte de Testes
-            </button>
-          </div>
-          <div id="resultado-testes-container">
-            <div class="alert alert-info">Clique no botão para rodar os testes automatizados.</div>
-          </div>
+      <div class="card" style="margin-bottom: 1rem;">
+        <div class="card-header">
+          <h2 class="card-title">📋 Resumo das 5 Fases Oficiais do Processo Eleitoral</h2>
         </div>
-
-        <div class="card">
-          <div class="card-header">
-            <h2 class="card-title">📋 Resumo das 5 Fases Oficiais</h2>
-          </div>
-          <div style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6;">
-            <p><strong>DPTI:</strong> Auto-cadastro seguido de liberação presencial e vínculo LDAP.</p>
-            <p><strong>Fase 1:</strong> Chefe de Seção indica 1 militar subordinado por classe.</p>
-            <p><strong>Fase 2:</strong> Chefe de Divisão seleciona até 2 indicados das suas seções.</p>
-            <p><strong>Fase 3:</strong> Chefes de Divisão deliberam votando Veto / Não Veto.</p>
-            <p><strong>Fase 4:</strong> Votação por clique de todo o efetivo (sem notas!).</p>
-            <p><strong>Fase 5:</strong> Presidente da COMARA homologa ou indica o ganhador direto.</p>
-          </div>
+        <div style="font-size: 0.88rem; color: var(--text-secondary); line-height: 1.7;">
+          <p><strong>1. DPTI & Efetivo:</strong> Auto-cadastro de militares e servidores com liberação presencial e ativação do modificador de acesso pelo Administrador da DPTI.</p>
+          <p><strong>2. Fase 1 (Indicação por Seção):</strong> Chefes de Seção indicam 1 militar/servidor subordinado por classe (Graduados, Praças e Civis).</p>
+          <p><strong>3. Fase 2 (Seleção por Divisão):</strong> Chefes de Divisão selecionam até 2 indicados das suas seções por classe para representar a divisão.</p>
+          <p><strong>4. Fase 3 (Rodada de Veto):</strong> Chefes de Divisão deliberam colegiadamente votando Veto / Não Veto com apuração por maioria absoluta.</p>
+          <p><strong>5. Fase 4 (Votação Geral por Clique):</strong> Cédula oficial onde todo o efetivo vota com sigilo absoluto e garantia criptográfica de quórum.</p>
+          <p><strong>6. Fase 5 (Decisão da Presidência):</strong> Apreciação pelo Comandante da OM / Presidente da COMARA com prerrogativa de homologar o mais votado ou indicar diretamente.</p>
         </div>
       </div>
 
@@ -829,7 +910,7 @@
         <div class="popover-body">
           <p>Nesta fase ocorre a consolidação dos representantes divisionais:</p>
           <ul>
-            <li><strong>Quem opera:</strong> Chefes das Divisões da COMARA (DE, DL, DA, DPC, DACO-MN, VP).</li>
+            <li><strong>Quem opera:</strong> Chefes das Divisões da COMARA (DE, DL, DA, DPC, DACO-MN, Presidência).</li>
             <li><strong>Candidatos elegíveis:</strong> Apenas os militares/servidores que foram indicados pelas seções subordinadas àquela divisão na Fase 1.</li>
             <li><strong>Limite regulamentar:</strong> O Chefe de Divisão pode selecionar <strong>no máximo 2 candidatos por classe</strong> para representar sua divisão.</li>
             <li><strong>Destino:</strong> Os selecionados seguem para a deliberação coletiva da Rodada de Veto (Fase 3).</li>

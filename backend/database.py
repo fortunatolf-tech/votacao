@@ -157,9 +157,16 @@ def init_db():
     CREATE TABLE IF NOT EXISTS eleitores_votaram (
         voter_hash TEXT PRIMARY KEY,
         identificador_mascarado TEXT NOT NULL,
-        data_hora TEXT NOT NULL
+        data_hora TEXT NOT NULL,
+        efetivo_id INTEGER
     )
     """)
+
+    # Migration: Adicionar coluna efetivo_id se tabela já existir sem ela
+    cursor.execute("PRAGMA table_info(eleitores_votaram)")
+    colunas_eleitores = [row[1] for row in cursor.fetchall()]
+    if "efetivo_id" not in colunas_eleitores:
+        cursor.execute("ALTER TABLE eleitores_votaram ADD COLUMN efetivo_id INTEGER")
 
     # 11. Fase 5: Apreciação e Decisão do Presidente da COMARA
     # acao_comando: 'HOMOLOGADO_ELEITO' ou 'INDICADO_DIRETO_CMDT'

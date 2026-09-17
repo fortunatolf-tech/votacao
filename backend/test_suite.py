@@ -24,6 +24,13 @@ class TestProcessoSeletivoComara(unittest.TestCase):
     def setUp(self):
         init_db()
 
+    def tearDown(self):
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute("DELETE FROM usuarios_ldap WHERE ldap_username = 'soldado.silva'")
+        conn.commit()
+        conn.close()
+
     # 1. TESTE DE AUTO-CADASTRO E BLOQUEIO PENDENTE DPTI
     def test_01_auto_cadastro_e_bloqueio_pendente_dpti(self):
         """Ao se auto-cadastrar, usuário é criado como USUARIO_COMUM com status PENDENTE_DPTI"""
@@ -47,6 +54,11 @@ class TestProcessoSeletivoComara(unittest.TestCase):
         """Administrador da DPTI vincula a conta de rede e define modificador de acesso definitivo"""
         conn = get_db_connection()
         c = conn.cursor()
+        shash = hash_senha("minhasenha123")
+        c.execute("""
+        INSERT OR REPLACE INTO usuarios_ldap (ldap_username, nome_completo, identificador, papel, divisao, secao, status, senha_hash, criado_em, ativo)
+        VALUES ('soldado.silva', 'Sd Silva Ramos', '8910293', 'USUARIO_COMUM', 'DE', 'DEPL', 'PENDENTE_DPTI', ?, '2026-09-16T12:00:00', 1)
+        """, (shash,))
         c.execute("""
         UPDATE usuarios_ldap
         SET status = 'ATIVO', papel = 'CHEFE_SECAO', vinculado_por = 'admin.dpti', vinculado_em = '2026-09-16T12:30:00'
