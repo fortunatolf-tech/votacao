@@ -58,6 +58,15 @@ def rodar_teste_completo():
     assert res_login_bloq.status_code == 403
     print(f"[OK] Bloqueio estrito de pendência DPTI acionado: {res_login_bloq.json()['detail'][:65]}...")
 
+    # Administrador faz login para acessar o painel DPTI e gerenciar fases
+    res_adm = client.post("/api/auth/login-ldap", json={
+        "ldap_username": "admin.dpti",
+        "password": "comara"
+    })
+    assert res_adm.status_code == 200
+    token_adm = res_adm.json()["token"]
+    client.headers["Authorization"] = f"Bearer {token_adm}"
+
     # Administrador na DPTI lista a fila de pendentes e libera o cadastro
     res_fila = client.get("/api/admin/dpti-fila")
     assert res_fila.status_code == 200

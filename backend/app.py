@@ -741,7 +741,7 @@ async def upload_efetivo(arquivo: UploadFile = File(...), admin_user: dict = Dep
 @app.post("/api/admin/efetivo/restaurar-padrao")
 def restaurar_efetivo_padrao(admin_user: dict = Depends(exigir_papeis(["ADMINISTRADOR"]))):
     """
-    Restaura o efetivo oficial padrão da COMARA (272 integrantes: 264 militares e 8 civis).
+    Restaura o efetivo oficial da COMARA (443 integrantes atualizados: 320 militares e 123 civis).
     """
     try:
         import importar_efetivo_oficial
@@ -750,12 +750,12 @@ def restaurar_efetivo_padrao(admin_user: dict = Depends(exigir_papeis(["ADMINIST
         raise HTTPException(status_code=500, detail=f"Erro ao restaurar efetivo padrão: {str(e)}")
 
     registrar_log("ADMIN_RESTAURAR_EFETIVO", admin_user["ldap_username"], "DPTI",
-                  "Efetivo oficial da COMARA restaurado com sucesso pelo Administrador (272 integrantes).")
+                  "Efetivo oficial da COMARA restaurado com sucesso pelo Administrador (443 integrantes).")
 
     return {
         "sucesso": True,
-        "mensagem": "Efetivo oficial da COMARA restaurado com sucesso (272 integrantes cadastrados: 264 militares e 8 civis).",
-        "total": 272
+        "mensagem": "Efetivo oficial da COMARA restaurado com sucesso (443 integrantes cadastrados: 320 militares e 123 civis).",
+        "total": 443
     }
 
 # ----------------- 3. AUTENTICAÇÃO UNIFICADA (SARAM / CPF / LDAP comara.intraer) -----------------

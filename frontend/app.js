@@ -939,7 +939,7 @@ async function handleUploadEfetivo(e) {
 }
 
 async function handleRestaurarEfetivoPadrao() {
-  if (!confirm("Deseja restaurar o efetivo oficial padrão da COMARA (272 integrantes: 264 militares e 8 civis)?")) {
+  if (!confirm("Deseja restaurar o efetivo oficial da COMARA (443 integrantes atualizados: 320 militares e 123 civis)?")) {
     return;
   }
 
@@ -966,7 +966,7 @@ async function handleRestaurarEfetivoPadrao() {
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.innerHTML = "<span>🔄</span> Restaurar Efetivo Oficial (272)";
+      btn.innerHTML = "<span>🔄</span> Restaurar Efetivo Oficial (443)";
     }
   }
 }

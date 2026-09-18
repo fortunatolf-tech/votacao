@@ -416,40 +416,57 @@ def importar():
         
     print(f"Militares únicos validados: {len(militares_processados)}")
     
-    # 1. Atualizar banco SQLite
+    # 1. Carregar Efetivo Oficial da Planilha Excel (443 integrantes atualizados)
+    excel_path = os.path.join(os.path.dirname(__file__), "data", "efetivo_comara_oficial.xlsx")
+    if not os.path.exists(excel_path):
+        raise FileNotFoundError(f"Planilha oficial não encontrada em: {excel_path}")
+
+    wb = openpyxl.load_workbook(excel_path, data_only=True)
+    ws = wb.active
+
     init_db()
     conn = get_db_connection()
     c = conn.cursor()
-    
-    # Servidores Civis Oficiais da COMARA (8 integrantes padrão com CPFs oficiais)
-    civis_atuais = [
-        {"nome": "Ana Paula Nogueira", "nome_guerra": "Ana Paula", "identificador": "111.222.333-44", "tipo": "CIVIL", "posto_grad_cargo": "SPTF", "categoria": "Civil", "divisao": "DE", "secao": "DEPJ", "tempo_comara_meses": 72},
-        {"nome": "Marcos Paulo Ferreira", "nome_guerra": "Ferreira", "identificador": "222.333.444-55", "tipo": "CIVIL", "posto_grad_cargo": "SPPF", "categoria": "Civil", "divisao": "DE", "secao": "DECA", "tempo_comara_meses": 50},
-        {"nome": "Juliana Mendes Cardoso", "nome_guerra": "Juliana", "identificador": "333.444.555-66", "tipo": "CIVIL", "posto_grad_cargo": "SPTF", "categoria": "Civil", "divisao": "DL", "secao": "DLCE", "tempo_comara_meses": 64},
-        {"nome": "Cláudio Valério Teles", "nome_guerra": "Valério", "identificador": "444.555.666-77", "tipo": "CIVIL", "posto_grad_cargo": "SPPF", "categoria": "Civil", "divisao": "DA", "secao": "DAPC", "tempo_comara_meses": 90},
-        {"nome": "Patrícia Bezerra Lima", "nome_guerra": "Patrícia", "identificador": "555.666.777-88", "tipo": "CIVIL", "posto_grad_cargo": "SPTF", "categoria": "Civil", "divisao": "DA", "secao": "DACC", "tempo_comara_meses": 45},
-        {"nome": "Helena Viana Campos", "nome_guerra": "Helena", "identificador": "666.777.888-99", "tipo": "CIVIL", "posto_grad_cargo": "SPPF", "categoria": "Civil", "divisao": "DPC", "secao": "SDC", "tempo_comara_meses": 58},
-        {"nome": "Eduardo Ramos Teixeira", "nome_guerra": "Teixeira", "identificador": "777.888.999-00", "tipo": "CIVIL", "posto_grad_cargo": "SPTF", "categoria": "Civil", "divisao": "DACO-MN", "secao": "SADM", "tempo_comara_meses": 40},
-        {"nome": "Beatriz Mendes Souza", "nome_guerra": "Beatriz", "identificador": "888.999.000-11", "tipo": "CIVIL", "posto_grad_cargo": "SPPF", "categoria": "Civil", "divisao": "PRESIDENCIA", "secao": "AJUR", "tempo_comara_meses": 85}
-    ]
-        
-    # Limpa tabela e insere o efetivo militar completo + servidores civis
+
+    # Limpar votos e indicações para iniciar processo eleitoral limpo
+    c.execute("DELETE FROM indicacoes_fase1_secao")
+    c.execute("DELETE FROM indicacoes_fase2_divisao")
+    c.execute("DELETE FROM vetos_fase3")
+    c.execute("DELETE FROM votos_fase4")
+    c.execute("DELETE FROM eleitores_votaram")
+    c.execute("DELETE FROM decisao_fase5_comando")
     c.execute("DELETE FROM efetivo")
-    
-    # Insere Civis
-    for civ in civis_atuais:
-        c.execute("""
-        INSERT INTO efetivo (nome, nome_guerra, identificador, tipo, posto_grad_cargo, categoria, divisao, secao, tempo_comara_meses, ativo)
-        VALUES (?, ?, ?, 'CIVIL', ?, 'Civil', ?, ?, ?, 1)
-        """, (civ["nome"], civ["nome_guerra"], civ["identificador"], civ["posto_grad_cargo"], civ["divisao"], civ["secao"], civ["tempo_comara_meses"]))
+
+    registros = []
+    # Formato: Ordem, Posto/Grad, Especialidade, Nome Completo, Nome de Guerra, SARAM / CPF, Classe Eleitoral, Divisão, Seção, Tempo COMARA (Meses), Telefone
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        if not row or not any(row):
+            continue
+        ordem = str(row[0] or "").strip()
+        posto = str(row[1] or "").strip()
+        esp = str(row[2] or "").strip()
+        nome = str(row[3] or "").strip()
+        guerra = str(row[4] or "").strip()
+        ident = str(row[5] or "").strip()
+        classe = str(row[6] or "").strip()
+        divisao = str(row[7] or "").strip()
+        secao = str(row[8] or "").strip()
+        tempo = int(row[9]) if row[9] and str(row[9]).isdigit() else 24
         
-    # Insere Militares
-    for m in militares_processados:
-        c.execute("""
-        INSERT INTO efetivo (nome, nome_guerra, identificador, tipo, posto_grad_cargo, categoria, divisao, secao, tempo_comara_meses, ativo)
-        VALUES (?, ?, ?, 'MILITAR', ?, ?, ?, ?, ?, 1)
-        """, (m["nome"], m["guerra"], m["saram"], f"{m['posto']} {m['esp']}".strip(), m["categoria"], m["divisao"], m["secao"], m["tempo_meses"]))
+        tipo = "CIVIL" if (classe == "Civil" or "CV" in posto.upper()) else "MILITAR"
+        if tipo == "MILITAR":
+            ident = ident.zfill(7)
+        posto_completo = f"{posto} {esp}".strip()
         
+        registros.append((
+            nome, guerra, ident, tipo, posto_completo, classe, divisao, secao, tempo
+        ))
+
+    c.executemany("""
+    INSERT INTO efetivo (nome, nome_guerra, identificador, tipo, posto_grad_cargo, categoria, divisao, secao, tempo_comara_meses, ativo)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+    """, registros)
+
     # 2. Configuração da Conta Exclusiva do Administrador da DPTI
     shash = hash_senha("comara")
     agora = "2026-09-16T12:00:00"
@@ -467,81 +484,10 @@ def importar():
     VALUES ('FASE_1_SECAO', ?, ?, 'admin.dpti')
     """, (agora, agora))
 
-    # Limpar votos e indicações para iniciar processo eleitoral limpo
-    c.execute("DELETE FROM indicacoes_fase1_secao")
-    c.execute("DELETE FROM indicacoes_fase2_divisao")
-    c.execute("DELETE FROM vetos_fase3")
-    c.execute("DELETE FROM votos_fase4")
-    c.execute("DELETE FROM eleitores_votaram")
-    c.execute("DELETE FROM decisao_fase5_comando")
-
     conn.commit()
     conn.close()
     
-    print("Banco de dados SQLite atualizado com o efetivo oficial!")
-
-    # 3. Gerar Planilha Excel Oficial Completa
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Efetivo COMARA Oficial"
-    
-    # Cabeçalho estilizado
-    headers = ["Ordem", "Posto/Grad", "Especialidade", "Nome Completo", "Nome de Guerra", "SARAM / CPF", "Classe Eleitoral", "Divisão", "Seção", "Tempo COMARA (Meses)", "Telefone"]
-    ws.append(headers)
-    
-    header_fill = PatternFill(start_color="0B2240", end_color="0B2240", fill_type="solid")
-    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
-    
-    for col_idx in range(1, len(headers) + 1):
-        cell = ws.cell(row=1, column=col_idx)
-        cell.fill = header_fill
-        cell.font = header_font
-        cell.alignment = Alignment(horizontal="center", vertical="center")
-        
-    # Linhas dos militares
-    row_idx = 2
-    for m in militares_processados:
-        ws.append([
-            m["ordem"],
-            m["posto"],
-            m["esp"],
-            m["nome"],
-            m["guerra"],
-            m["saram"],
-            m["categoria"],
-            m["divisao"],
-            m["secao"],
-            m["tempo_meses"],
-            m["contato"]
-        ])
-        row_idx += 1
-        
-    # Linhas dos servidores civis
-    for civ in civis_atuais:
-        ws.append([
-            "CIV",
-            civ["posto_grad_cargo"],
-            "CIVIL",
-            civ["nome"],
-            civ["nome_guerra"],
-            civ["identificador"],
-            "Civil",
-            civ["divisao"],
-            civ["secao"],
-            civ["tempo_comara_meses"],
-            "(91) 3204-9100"
-        ])
-        
-    # Ajuste de largura das colunas
-    for col in ws.columns:
-        max_len = max(len(str(cell.value or '')) for cell in col)
-        col_letter = openpyxl.utils.get_column_letter(col[0].column)
-        ws.column_dimensions[col_letter].width = max(max_len + 3, 12)
-        
-    excel_path = os.path.join(os.path.dirname(__file__), "data", "efetivo_comara_oficial.xlsx")
-    wb.save(excel_path)
-    print(f"Planilha Excel oficial gerada com sucesso em: {excel_path}")
-    print(f" -> Total de registros na planilha: {row_idx - 1} militares + {len(civis_atuais)} servidores civis.")
+    print(f"Banco de dados SQLite atualizado com o efetivo oficial atualizado ({len(registros)} integrantes)!")
 
 if __name__ == "__main__":
     importar()
