@@ -126,39 +126,21 @@ def obter_usuario_autenticado(authorization: Optional[str] = Header(None)) -> Op
     
     conn = get_db_connection()
     c = conn.cursor()
+    digitos = re.sub(r"\D", "", username)
     c.execute("""
     SELECT id, ldap_username, nome_completo, identificador, papel, divisao, secao, status, ativo
     FROM usuarios_ldap
-    WHERE LOWER(ldap_username) = ? AND ativo = 1
-    """, (username.lower(),))
-    row = c.fetchone()
-    
-    if row and row["status"] == "ATIVO":
-        conn.close()
-        return dict(row)
-        
-    # Se não estiver em usuarios_ldap, verifica se é integrante do efetivo ativo (autenticado por SARAM ou CPF)
-    c.execute("""
-    SELECT id, nome as nome_completo, identificador, divisao, secao, ativo
-    FROM efetivo
-    WHERE (identificador = ? OR REPLACE(REPLACE(REPLACE(identificador, '.', ''), '-', ''), ' ', '') = ?) AND ativo = 1
+    WHERE (LOWER(ldap_username) = ? 
+        OR identificador = ? 
+        OR (? != '' AND REPLACE(REPLACE(REPLACE(identificador, '.', ''), '-', ''), ' ', '') = ?))
+      AND ativo = 1 AND status = 'ATIVO'
     LIMIT 1
-    """, (username, username))
-    row_ef = c.fetchone()
+    """, (username.lower(), username, digitos, digitos))
+    row = c.fetchone()
     conn.close()
     
-    if row_ef:
-        return {
-            "id": row_ef["id"],
-            "ldap_username": row_ef["identificador"],
-            "nome_completo": row_ef["nome_completo"],
-            "identificador": row_ef["identificador"],
-            "papel": papel,
-            "divisao": row_ef["divisao"],
-            "secao": row_ef["secao"] if row_ef["secao"] else "",
-            "status": "ATIVO",
-            "ativo": row_ef["ativo"]
-        }
+    if row:
+        return dict(row)
         
     return None
 
@@ -762,8 +744,15 @@ def restaurar_efetivo_padrao(admin_user: dict = Depends(exigir_papeis(["ADMINIST
 
 @app.post("/api/auth/login-ldap")
 def login_ldap(credenciais: LoginLdapInput):
-    raw_user = credenciais.ldap_username.strip()
+    raw_user = (credenciais.ldap_username or "").strip()
     password = credenciais.password
+    
+    # 1. Validação de segurança: Senha é estritamente obrigatória
+    if not password or not str(password).strip():
+        raise HTTPException(
+            status_code=400,
+            detail="A senha é obrigatória. Não é permitido efetuar login sem senha no sistema da COMARA."
+        )
     
     # Normalização de Domínio Active Directory (comara.intraer)
     username_clean = raw_user
@@ -778,124 +767,89 @@ def login_ldap(credenciais: LoginLdapInput):
     conn = get_db_connection()
     c = conn.cursor()
     
-    # 1. Verifica se o login fornecido corresponde a um SARAM ou CPF presente no efetivo
-    integrante = None
+    # 2. Localiza a conta na tabela de contas de rede / credenciadas (usuarios_ldap)
+    # Permite busca por login LDAP de rede (ex.: admin.dpti) ou por SARAM / CPF
+    u = None
     if digitos:
         c.execute("""
-        SELECT * FROM efetivo 
+        SELECT * FROM usuarios_ldap 
         WHERE REPLACE(REPLACE(REPLACE(identificador, '.', ''), '-', ''), ' ', '') = ?
            OR identificador = ?
-        LIMIT 1
-        """, (digitos, raw_user))
-        integrante = c.fetchone()
-    
-    if not integrante:
-        c.execute("SELECT * FROM efetivo WHERE LOWER(identificador) = ? LIMIT 1", (raw_user.lower(),))
-        integrante = c.fetchone()
+           OR LOWER(ldap_username) = ?
+        ORDER BY id DESC LIMIT 1
+        """, (digitos, raw_user, username_clean.lower()))
+        u = c.fetchone()
         
-    if integrante:
-        identificador_oficial = integrante["identificador"]
-        
-        # Verifica se o integrante possui conta vinculada e ATIVA no LDAP com papel de liderança ou administração
+    if not u:
         c.execute("""
         SELECT * FROM usuarios_ldap 
-        WHERE identificador = ? AND status = 'ATIVO' AND ativo = 1
+        WHERE LOWER(ldap_username) = ? OR LOWER(identificador) = ?
         ORDER BY id DESC LIMIT 1
-        """, (identificador_oficial,))
-        u_ldap = c.fetchone()
+        """, (username_clean.lower(), raw_user.lower()))
+        u = c.fetchone()
         
-        shash = hash_senha(password)
-        if u_ldap:
-            # Se a senha informada confere com a conta LDAP ativa, autentica com o papel institucional
-            if u_ldap["senha_hash"] == shash:
-                conn.close()
-                registrar_log("LOGIN_SUCESSO", u_ldap["ldap_username"], u_ldap["divisao"],
-                              f"Autenticado via SARAM/CPF com perfil ativo {u_ldap['papel']}.")
-                token = criar_token_jwt({
-                    "sub": u_ldap["ldap_username"],
-                    "papel": u_ldap["papel"],
-                    "divisao": u_ldap["divisao"],
-                    "secao": u_ldap["secao"]
-                })
-                return {
-                    "sucesso": True,
-                    "token": token,
-                    "ldap_username": u_ldap["ldap_username"],
-                    "nome_completo": u_ldap["nome_completo"],
-                    "identificador": u_ldap["identificador"],
-                    "papel": u_ldap["papel"],
-                    "divisao": u_ldap["divisao"],
-                    "secao": u_ldap["secao"],
-                    "posto_grad_cargo": integrante["posto_grad_cargo"],
-                    "nome_guerra": integrante["nome_guerra"],
-                    "categoria": integrante["categoria"]
-                }
-            elif password and u_ldap["papel"] in ["ADMINISTRADOR", "CMDT_OM"]:
-                conn.close()
-                raise HTTPException(status_code=401, detail="Senha incorreta para a conta institucional administrativa.")
+    # Se a conta não existe em usuarios_ldap, verifica se o usuário ao menos consta no efetivo da COMARA
+    if not u:
+        integrante = None
+        if digitos:
+            c.execute("""
+            SELECT * FROM efetivo 
+            WHERE REPLACE(REPLACE(REPLACE(identificador, '.', ''), '-', ''), ' ', '') = ?
+               OR identificador = ?
+            LIMIT 1
+            """, (digitos, raw_user))
+            integrante = c.fetchone()
+        if not integrante:
+            c.execute("SELECT * FROM efetivo WHERE LOWER(identificador) = ? LIMIT 1", (raw_user.lower(),))
+            integrante = c.fetchone()
+            
+        conn.close()
+        registrar_log("FALHA_LOGIN_SEM_CONTA", raw_user, None, "Tentativa de login com conta não cadastrada ou não aprovada.")
+        if integrante:
+            raise HTTPException(
+                status_code=401,
+                detail=f"Olá, {integrante['posto_grad_cargo']} {integrante['nome_guerra']}. Seu identificador consta no efetivo da COMARA, porém sua conta ainda não foi aprovada pelo Administrador na DPTI. Realize o auto-cadastro ou solicite a liberação presencial."
+            )
+        else:
+            raise HTTPException(
+                status_code=401,
+                detail=f"Credenciais inválidas: Usuário '{raw_user}' não localizado no sistema ou no efetivo ativo da COMARA."
+            )
 
-        # Votante do efetivo cadastrado:
-        # "antes disso o usuario loga com o cpf ou saram":
-        # Todo militar e civil do efetivo é votante legítimo como USUARIO_COMUM!
-        conn.close()
-        registrar_log("LOGIN_SUCESSO", identificador_oficial, integrante["divisao"],
-                      f"Eleitor do efetivo autenticado via SARAM/CPF ({integrante['posto_grad_cargo']} {integrante['nome_guerra']}).")
-        
-        token = criar_token_jwt({
-            "sub": identificador_oficial,
-            "papel": "USUARIO_COMUM",
-            "divisao": integrante["divisao"],
-            "secao": integrante["secao"]
-        })
-        return {
-            "sucesso": True,
-            "token": token,
-            "ldap_username": identificador_oficial,
-            "nome_completo": integrante["nome"],
-            "identificador": identificador_oficial,
-            "papel": "USUARIO_COMUM",
-            "divisao": integrante["divisao"],
-            "secao": integrante["secao"],
-            "posto_grad_cargo": integrante["posto_grad_cargo"],
-            "nome_guerra": integrante["nome_guerra"],
-            "categoria": integrante["categoria"]
-        }
-        
-    # 2. Se não foi localizado pelo SARAM/CPF no efetivo, tenta autenticação pelo usuário LDAP (comara.intraer)
-    c.execute("SELECT * FROM usuarios_ldap WHERE LOWER(ldap_username) = ?", (username_clean.lower(),))
-    u = c.fetchone()
-    
+    # 3. Validação rigorosa da senha com SHA-256
     shash = hash_senha(password)
-    if not u or u["senha_hash"] != shash:
+    if u["senha_hash"] != shash:
         conn.close()
-        registrar_log("FALHA_LOGIN_LDAP", username_clean, None, "Tentativa com credenciais inválidas.")
+        registrar_log("FALHA_LOGIN_SENHA", u["ldap_username"], u["divisao"], "Tentativa de login com senha incorreta.")
         raise HTTPException(
             status_code=401,
-            detail=f"Credenciais inválidas no domínio {ACTIVE_DIRECTORY_DOMAIN}. Verifique seu usuário de rede ou entre diretamente com seu SARAM ou CPF."
+            detail="Credenciais inválidas: Senha incorreta. Verifique os dados e tente novamente."
         )
-        
-    # "quem ativa o login pelo ldap é apenas o administrador"
+
+    # 4. Validação de aprovação pelo Administrador (DPTI)
     if u["status"] == "PENDENTE_DPTI":
         conn.close()
-        registrar_log("BLOQUEIO_PENDENCIA_DPTI", username_clean, u["divisao"], "Acesso negado: Conta LDAP aguarda ativação pelo Administrador na DPTI.")
+        registrar_log("BLOQUEIO_PENDENCIA_DPTI", u["ldap_username"], u["divisao"], "Acesso negado: Conta aguarda aprovação pelo Administrador na DPTI.")
         raise HTTPException(
             status_code=403,
-            detail=f"Acesso LDAP Pendente: A conta '{username_clean}@{ACTIVE_DIRECTORY_DOMAIN}' aguarda ativação presencial pelo Administrador na DPTI. Para votar agora, você pode entrar diretamente com seu SARAM ou CPF."
+            detail=f"Acesso Pendente: A conta '{u['ldap_username']}' aguarda aprovação presencial pelo Administrador na DPTI para ser liberada."
         )
 
-    if u["ativo"] != 1:
+    if u["ativo"] != 1 or u["status"] != "ATIVO":
         conn.close()
-        raise HTTPException(status_code=403, detail="Conta desativada pelo Administrador.")
+        registrar_log("BLOQUEIO_CONTA_DESATIVADA", u["ldap_username"], u["divisao"], "Acesso negado: Conta inativa.")
+        raise HTTPException(status_code=403, detail="Conta desativada ou bloqueada pelo Administrador.")
 
+    # 5. Obter informações complementares de posto/graduação do efetivo
     c.execute("""
     SELECT posto_grad_cargo, nome_guerra, categoria FROM efetivo 
     WHERE identificador = ? OR REPLACE(REPLACE(REPLACE(identificador, '.', ''), '-', ''), ' ', '') = ?
     LIMIT 1
-    """, (u["identificador"], u["identificador"]))
+    """, (u["identificador"], re.sub(r"\D", "", u["identificador"]) or u["identificador"]))
     efetivo_info = c.fetchone()
     conn.close()
 
-    registrar_log("LOGIN_SUCESSO", username_clean, u["divisao"], f"Autenticado no sistema como {u['papel']}.")
+    registrar_log("LOGIN_SUCESSO", u["ldap_username"], u["divisao"], f"Autenticado no sistema com perfil ativo {u['papel']}.")
 
     token = criar_token_jwt({
         "sub": u["ldap_username"],
@@ -1233,24 +1187,49 @@ def obter_cedula_fase4():
     }
 
 @app.post("/api/fase4/votar")
-def registrar_voto_fase4(dados: VotoGeralFase4Input):
-    """Computa o voto individual por clique (sem atribuição de notas!)."""
-    ident_limpo = dados.identificador.strip().replace(".", "").replace("-", "")
+def registrar_voto_fase4(dados: VotoGeralFase4Input, auth_user: dict = Depends(exigir_autenticacao)):
+    """
+    Computa o voto individual por clique (sem atribuição de notas!).
+    Segurança Reforçada:
+    - Exige autenticação prévia (token Bearer JWT) de conta aprovada.
+    - O eleitor que está votando é estritamente o usuário autenticado (auth_user['identificador']).
+    - Tentativa de enviar identificador de terceiros é bloqueada com HTTP 403.
+    """
+    eleitor_identificador = auth_user["identificador"]
+    
+    # Impedir qualquer tentativa de personificação de outro eleitor
+    if dados.identificador:
+        dados_ident_limpo = re.sub(r"\D", "", dados.identificador) or dados.identificador.strip().lower()
+        auth_ident_limpo = re.sub(r"\D", "", eleitor_identificador) or eleitor_identificador.strip().lower()
+        if dados_ident_limpo != auth_ident_limpo and dados.identificador.strip().lower() != eleitor_identificador.strip().lower():
+            registrar_log("TENTATIVA_IMPERSONACAO_VOTO", auth_user["ldap_username"], auth_user["divisao"],
+                          f"Tentativa de votar com identificador de terceiros ({dados.identificador}) bloqueada.")
+            raise HTTPException(
+                status_code=403,
+                detail="Violação de segurança: Você só pode votar em seu próprio nome e SARAM/CPF autenticado. Voto em nome de terceiros é estritamente proibido."
+            )
+
     conn = get_db_connection()
     c = conn.cursor()
     
-    c.execute("SELECT id, nome, identificador, divisao FROM efetivo WHERE REPLACE(REPLACE(identificador, '.', ''), '-', '') = ?", (ident_limpo,))
+    digitos = re.sub(r"\D", "", eleitor_identificador)
+    c.execute("""
+    SELECT id, nome, identificador, divisao FROM efetivo 
+    WHERE (identificador = ? OR ( ? != '' AND REPLACE(REPLACE(REPLACE(identificador, '.', ''), '-', ''), ' ', '') = ? ))
+      AND ativo = 1
+    LIMIT 1
+    """, (eleitor_identificador, digitos, digitos))
     eleitor = c.fetchone()
     if not eleitor:
         conn.close()
-        raise HTTPException(status_code=403, detail="Identificador não cadastrado no efetivo ativo da COMARA.")
+        raise HTTPException(status_code=403, detail="O usuário autenticado não consta no efetivo ativo de votantes da COMARA.")
         
     voter_hash = gerar_hash_eleitor(eleitor["identificador"])
     c.execute("SELECT voter_hash FROM eleitores_votaram WHERE voter_hash = ?", (voter_hash,))
     if c.fetchone():
         conn.close()
-        registrar_log("BLOQUEIO_VOTO_DUPLICADO", "ANONIMO", eleitor["divisao"], "Tentativa de re-votação bloqueada.")
-        raise HTTPException(status_code=400, detail="Voto já computado para este eleitor.")
+        registrar_log("BLOQUEIO_VOTO_DUPLICADO", auth_user["ldap_username"], eleitor["divisao"], "Tentativa de re-votação bloqueada.")
+        raise HTTPException(status_code=400, detail="Voto já computado para o seu usuário nesta eleição. Cada eleitor só pode votar uma única vez.")
 
     # Validar que votou em 1 de cada classe ativa
     for cat in CATEGORIAS_OFICIAIS:
@@ -1278,7 +1257,7 @@ def registrar_voto_fase4(dados: VotoGeralFase4Input):
         raise HTTPException(status_code=500, detail=f"Erro ao gravar voto: {str(e)}")
         
     conn.close()
-    registrar_log("FASE4_VOTO_COMPUTADO", "ELEITOR", eleitor["divisao"], f"Voto por clique computado. Comprovante: {voter_hash[:12]}")
+    registrar_log("FASE4_VOTO_COMPUTADO", auth_user["ldap_username"], eleitor["divisao"], f"Voto computado com sucesso pelo eleitor autenticado. Comprovante: {voter_hash[:12]}")
     return {
         "sucesso": True,
         "mensagem": "Voto computado com sucesso!",

@@ -154,6 +154,129 @@ class TestProcessoSeletivoComara(unittest.TestCase):
         candidato_vencedor_final_cmdt = candidato_escolhido_cmdt
         self.assertEqual(candidato_vencedor_final_cmdt, 3, "Comandante tem a prerrogativa de indicar quem ele quer que seja o ganhador.")
 
+    # 8. TESTE DE SEGURANÇA: LOGIN SEM SENHA DEVE SER REJEITADO (HTTP 400)
+    def test_08_login_sem_senha_rejeitado(self):
+        """Tentativa de login sem fornecer senha deve retornar HTTP 400."""
+        from app import app
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        res = client.post("/api/auth/login-ldap", json={"ldap_username": "admin.dpti", "password": ""})
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("A senha é obrigatória", res.json()["detail"])
+
+    # 9. TESTE DE SEGURANÇA: USUÁRIO NÃO APROVADO PELO ADMINISTRADOR (PENDENTE DPTI) BLOQUEADO (HTTP 403)
+    def test_09_login_pendente_dpti_bloqueado(self):
+        """Conta em PENDENTE_DPTI não pode logar nem votar."""
+        conn = get_db_connection()
+        c = conn.cursor()
+        shash = hash_senha("senha123")
+        c.execute("""
+        INSERT OR REPLACE INTO usuarios_ldap (ldap_username, nome_completo, identificador, papel, divisao, secao, status, senha_hash, criado_em, ativo)
+        VALUES ('teste.pendente', 'Militar Pendente', '9991112', 'USUARIO_COMUM', 'DE', 'DEPL', 'PENDENTE_DPTI', ?, '2026-09-18T10:00:00', 1)
+        """, (shash,))
+        conn.commit()
+        conn.close()
+
+        from app import app
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        res = client.post("/api/auth/login-ldap", json={"ldap_username": "teste.pendente", "password": "senha123"})
+        self.assertEqual(res.status_code, 403)
+        self.assertIn("Acesso Pendente", res.json()["detail"])
+
+        # Limpeza
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute("DELETE FROM usuarios_ldap WHERE ldap_username = 'teste.pendente'")
+        conn.commit()
+        conn.close()
+
+    # 10. TESTE DE SEGURANÇA: INTEGRANTE DO EFETIVO SEM CONTA APROVADA NÃO CONSEGUE LOGAR
+    def test_10_login_sem_conta_aprovada_rejeitado(self):
+        """Militar que está no efetivo mas não tem conta aprovada na DPTI não consegue logar."""
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute("""
+        INSERT OR REPLACE INTO efetivo (id, nome, nome_guerra, identificador, tipo, posto_grad_cargo, categoria, divisao, secao, tempo_comara_meses, ativo)
+        VALUES (99903, 'Militar Sem Conta', 'Sem Conta', '9990003', 'MILITAR', '3S', 'Graduados', 'DE', 'DEPL', 12, 1)
+        """)
+        conn.commit()
+        conn.close()
+
+        from app import app
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        res = client.post("/api/auth/login-ldap", json={"ldap_username": "9990003", "password": "qualquersenha"})
+        self.assertEqual(res.status_code, 401)
+        self.assertIn("ainda não foi aprovada pelo Administrador na DPTI", res.json()["detail"])
+
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute("DELETE FROM efetivo WHERE id = 99903")
+        conn.commit()
+        conn.close()
+
+    # 11. TESTE DE SEGURANÇA: VOTAÇÃO NA FASE 4 SEM AUTENTICAÇÃO É REJEITADA (HTTP 401)
+    def test_11_votacao_fase4_sem_autenticacao_rejeitada(self):
+        """Votação sem token JWT Bearer é rejeitada com HTTP 401."""
+        from app import app
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        res = client.post("/api/fase4/votar", json={
+            "identificador": "6012341",
+            "votos": {"Graduados": 1, "Pracas": 2, "Civil": 3}
+        })
+        self.assertEqual(res.status_code, 401)
+
+    # 12. TESTE DE SEGURANÇA: IMPERSONAÇÃO DE VOTO BLOQUEADA (HTTP 403)
+    def test_12_votacao_impersonacao_bloqueada(self):
+        """Usuário autenticado não pode votar passando identificador de outro militar/civil."""
+        conn = get_db_connection()
+        c = conn.cursor()
+        shash = hash_senha("senha123")
+        c.execute("""
+        INSERT OR REPLACE INTO efetivo (id, nome, nome_guerra, identificador, tipo, posto_grad_cargo, categoria, divisao, secao, tempo_comara_meses, ativo)
+        VALUES (99901, 'Eleitor Alfa', 'Alfa', '9990001', 'MILITAR', '1S', 'Graduados', 'DE', 'DEPL', 36, 1)
+        """)
+        c.execute("""
+        INSERT OR REPLACE INTO efetivo (id, nome, nome_guerra, identificador, tipo, posto_grad_cargo, categoria, divisao, secao, tempo_comara_meses, ativo)
+        VALUES (99902, 'Eleitor Bravo', 'Bravo', '9990002', 'MILITAR', '2S', 'Graduados', 'DE', 'DEPL', 24, 1)
+        """)
+        c.execute("""
+        INSERT OR REPLACE INTO usuarios_ldap (ldap_username, nome_completo, identificador, papel, divisao, secao, status, senha_hash, criado_em, ativo)
+        VALUES ('eleitor.alfa', 'Eleitor Alfa', '9990001', 'USUARIO_COMUM', 'DE', 'DEPL', 'ATIVO', ?, '2026-09-18T10:00:00', 1)
+        """, (shash,))
+        conn.commit()
+        conn.close()
+
+        from app import app
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        # Login de Eleitor Alfa
+        res_login = client.post("/api/auth/login-ldap", json={"ldap_username": "eleitor.alfa", "password": "senha123"})
+        self.assertEqual(res_login.status_code, 200)
+        token_alfa = res_login.json()["token"]
+
+        # Alfa tenta votar fingindo ser Bravo (identificador 9990002)
+        res_impersonar = client.post(
+            "/api/fase4/votar",
+            headers={"Authorization": f"Bearer {token_alfa}"},
+            json={
+                "identificador": "9990002",
+                "votos": {"Graduados": 99901, "Pracas": 99902, "Civil": 99901}
+            }
+        )
+        self.assertEqual(res_impersonar.status_code, 403)
+        self.assertIn("Violação de segurança", res_impersonar.json()["detail"])
+
+        # Limpeza
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute("DELETE FROM usuarios_ldap WHERE ldap_username = 'eleitor.alfa'")
+        c.execute("DELETE FROM efetivo WHERE id IN (99901, 99902)")
+        conn.commit()
+        conn.close()
+
 def rodar_testes_e_obter_relatorio():
     suite = unittest.defaultTestLoader.loadTestsFromTestCase(TestProcessoSeletivoComara)
     runner = unittest.TextTestRunner(verbosity=2)

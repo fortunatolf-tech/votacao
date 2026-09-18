@@ -277,6 +277,9 @@ function aplicarUsuarioDeslogado() {
 
   configurarPermissoesAbas("VISITANTE");
   carregarStatusFases();
+  if (appState.abaAtiva === "fase4") {
+    carregarCabineFase4();
+  }
 }
 
 function logoutUsuario() {
@@ -470,6 +473,9 @@ function aplicarUsuarioLogado(user) {
   // Configurar abas e redirecionar conforme modificador de acesso
   configurarPermissoesAbas(user.papel);
   carregarStatusFases();
+  if (appState.abaAtiva === "fase4") {
+    carregarCabineFase4();
+  }
 
   // Carrega quórum apenas se o perfil tiver autorização expressa
   if (["ADMINISTRADOR", "CMDT_OM", "CHEFE_DIVISAO"].includes(user.papel)) {
@@ -1394,11 +1400,6 @@ window.handleVotarVeto = async function(candidatoId, votoVeto) {
 // ABA 5: FASE 4 - CABINE DE VOTAÇÃO GERAL POR CLIQUE (SEM NOTAS)
 // ==========================================
 function initEventosFase4() {
-  const formAuthInline = document.getElementById("form-fase4-auth-inline");
-  if (formAuthInline) {
-    formAuthInline.addEventListener("submit", handleTrocarEleitorFase4Submit);
-  }
-
   const formVotarF4 = document.getElementById("form-fase4-votar");
   if (formVotarF4) {
     formVotarF4.addEventListener("submit", handleSubmeterVotoFase4);
@@ -1410,90 +1411,18 @@ function initEventosFase4() {
   }
 }
 
-window.toggleTrocarEleitorFase4 = function(forcar = null) {
-  const box = document.getElementById("fase4-box-trocar-eleitor");
-  if (!box) return;
-  if (forcar !== null) {
-    box.style.display = forcar ? "block" : "none";
-  } else {
-    box.style.display = box.style.display === "none" ? "block" : "none";
-  }
-  if (box.style.display === "block") {
-    const input = document.getElementById("fase4-input-saram");
-    if (input) {
-      input.focus();
-      input.select();
-    }
-  }
-};
-
-async function handleTrocarEleitorFase4Submit(e) {
-  e.preventDefault();
-  const ident = document.getElementById("fase4-input-saram").value.trim();
-  const feedback = document.getElementById("fase4-auth-feedback");
-  if (feedback) feedback.innerHTML = "";
-
-  if (!ident) {
-    showToast("Identificador Obrigatório", "Por favor, digite o SARAM ou CPF do votante.", "warning");
-    if (feedback) feedback.innerHTML = `<div class="alert alert-warning">Digite o SARAM do militar ou CPF do servidor civil.</div>`;
-    return;
-  }
-
-  // Se efetivo geral ainda não estiver em memória, busca na API
-  if (!appState.efetivoGeral || appState.efetivoGeral.length === 0) {
-    try {
-      const r = await fetch("/api/efetivo");
-      appState.efetivoGeral = await r.json();
-    } catch (err) {}
-  }
-
-  const identLimpo = ident.replace(/\./g, "").replace(/-/g, "").trim().toLowerCase();
-  const eleitor = appState.efetivoGeral.find(m => {
-    const saramLimpo = (m.identificador || "").replace(/\./g, "").replace(/-/g, "").trim().toLowerCase();
-    const ldapLimpo = (m.ldap_username || "").trim().toLowerCase();
-    return saramLimpo === identLimpo || ldapLimpo === identLimpo;
-  });
-
-  if (!eleitor) {
-    showToast("Eleitor Não Localizado", `O SARAM/CPF "${ident}" não foi encontrado no efetivo cadastrado na DPTI.`, "error");
-    if (feedback) {
-      feedback.innerHTML = `
-        <div class="alert alert-danger" style="margin-top: 0.5rem;">
-          <span>⚠️</span>
-          <div><strong>Identificador não cadastrado:</strong> Verifique se o número digitado está correto ou realize o credenciamento prévio na DPTI.</div>
-        </div>
-      `;
-    }
-    return;
-  }
-
-  appState.eleitorFase4 = eleitor;
-  appState.votosFase4 = { Graduados: null, Pracas: null, Civil: null };
-
-  atualizarCabecalhoEleitorFase4();
-  renderizarCartoesCedulaClique("Graduados", "cedula-fase4-graduados", "badge-graduados");
-  renderizarCartoesCedulaClique("Pracas", "cedula-fase4-pracas", "badge-pracas");
-  renderizarCartoesCedulaClique("Civil", "cedula-fase4-civil", "badge-civil");
-  atualizarPillsProgressoFase4();
-
-  toggleTrocarEleitorFase4(false);
-  showToast("Eleitor Habilitado na Cabine", `${eleitor.posto_grad_cargo} ${eleitor.nome_guerra} (${eleitor.divisao}) pronto para votar.`, "success");
-}
-
 function atualizarCabecalhoEleitorFase4() {
   const elNome = document.getElementById("fase4-eleitor-nome");
   const elDiv = document.getElementById("fase4-eleitor-divisao");
   const elIdent = document.getElementById("fase4-eleitor-identificador");
-  const inputSaram = document.getElementById("fase4-input-saram");
 
-  const eleitor = appState.eleitorFase4 || appState.usuarioAtual;
-  if (eleitor) {
-    if (elNome) elNome.textContent = `${eleitor.posto_grad_cargo || ''} ${eleitor.nome_guerra || eleitor.nome_completo || 'Eleitor Desconhecido'}`;
+  const eleitor = appState.usuarioAtual;
+  if (eleitor && eleitor.token) {
+    if (elNome) elNome.textContent = `${eleitor.posto_grad_cargo || ''} ${eleitor.nome_guerra || eleitor.nome_completo || 'Eleitor Autenticado'}`;
     if (elDiv) elDiv.textContent = `${eleitor.divisao || 'COMARA'}${eleitor.secao ? ' / ' + eleitor.secao : ''}`;
     if (elIdent) elIdent.textContent = eleitor.identificador || eleitor.ldap_username || '--';
-    if (inputSaram && eleitor.identificador) inputSaram.value = eleitor.identificador;
   } else {
-    if (elNome) elNome.textContent = "Nenhum eleitor identificado";
+    if (elNome) elNome.textContent = "--";
     if (elDiv) elDiv.textContent = "--";
     if (elIdent) elIdent.textContent = "--";
   }
@@ -1540,12 +1469,26 @@ function atualizarPillsProgressoFase4() {
 }
 
 async function carregarCabineFase4() {
-  // 1. Vincula eleitor padrão a partir do usuário logado se ainda não definido
-  if (!appState.eleitorFase4 && appState.usuarioAtual) {
-    appState.eleitorFase4 = appState.usuarioAtual;
+  const topCard = document.getElementById("fase4-top-voter-card");
+  const boxBloqueio = document.getElementById("fase4-box-bloqueio-auth");
+  const boxCedula = document.getElementById("fase4-box-cedula");
+  const boxComp = document.getElementById("fase4-box-comprovante");
+
+  // 1. Verificação rigorosa de autenticação prévia
+  if (!appState.usuarioAtual || !appState.usuarioAtual.token) {
+    if (topCard) topCard.style.display = "none";
+    if (boxBloqueio) boxBloqueio.style.display = "block";
+    if (boxCedula) boxCedula.style.display = "none";
+    if (boxComp) boxComp.style.display = "none";
+    return;
   }
 
-  // 2. Atualiza dados do cabeçalho
+  if (boxBloqueio) boxBloqueio.style.display = "none";
+  if (topCard) topCard.style.display = "flex";
+  if (boxCedula) boxCedula.style.display = "block";
+  if (boxComp) boxComp.style.display = "none";
+
+  // 2. Atualiza dados do cabeçalho com o eleitor autenticado
   atualizarCabecalhoEleitorFase4();
 
   // 3. Alerta de fase inativa (caso não seja Fase 4)
@@ -1572,12 +1515,6 @@ async function carregarCabineFase4() {
 
   // 6. Atualiza os pills de progresso
   atualizarPillsProgressoFase4();
-
-  // 7. Garante visibilidade da cédula direta
-  const boxCedula = document.getElementById("fase4-box-cedula");
-  const boxComp = document.getElementById("fase4-box-comprovante");
-  if (boxCedula) boxCedula.style.display = "block";
-  if (boxComp) boxComp.style.display = "none";
 }
 
 async function carregarCedulaFase4() {
@@ -1696,12 +1633,12 @@ async function handleSubmeterVotoFase4(e) {
   const avisoFalha = document.getElementById("fase4-voto-aviso-falha");
   if (avisoFalha) avisoFalha.innerHTML = "";
 
-  // 1. Verifica eleitor autenticado
-  const eleitor = appState.eleitorFase4 || appState.usuarioAtual;
-  if (!eleitor || !eleitor.identificador) {
+  // 1. Verifica autenticação obrigatória do eleitor
+  const eleitor = appState.usuarioAtual;
+  if (!eleitor || !eleitor.token || !eleitor.identificador) {
     showToast(
-      "Eleitor Não Identificado",
-      "Por favor, identifique seu SARAM ou CPF antes de registrar o voto.",
+      "Autenticação Obrigatória",
+      "Você precisa estar autenticado no sistema para votar. Efetue login com sua conta aprovada pela DPTI.",
       "warning",
       5000
     );
@@ -1709,11 +1646,11 @@ async function handleSubmeterVotoFase4(e) {
       avisoFalha.innerHTML = `
         <div class="alert alert-warning" style="text-align: left; margin-top: 0.5rem;">
           <span>⚠️</span>
-          <div><strong>Identificação Pendente:</strong> Clique em "Trocar Eleitor" no painel superior e digite seu SARAM ou CPF.</div>
+          <div><strong>Identificação Pendente:</strong> Efetue login para votar. Não é permitido votar sem autenticação ou em nome de terceiros.</div>
         </div>
       `;
     }
-    toggleTrocarEleitorFase4(true);
+    abrirModalLogin();
     return;
   }
 
@@ -1777,10 +1714,11 @@ async function handleSubmeterVotoFase4(e) {
 
   const resumo = 
     `Confirma a gravação definitiva do seu voto?\n\n` +
+    `👤 Eleitor: ${eleitor.posto_grad_cargo || ''} ${eleitor.nome_guerra || eleitor.nome_completo} (${eleitor.identificador})\n\n` +
     `⭐ Graduado: ${candGrad ? candGrad.posto_grad_cargo + ' ' + candGrad.nome_guerra : '#' + appState.votosFase4.Graduados}\n` +
     `🎖️ Praça: ${candPrac ? candPrac.posto_grad_cargo + ' ' + candPrac.nome_guerra : '#' + appState.votosFase4.Pracas}\n` +
     `🏛️ Civil: ${candCiv ? candCiv.posto_grad_cargo + ' ' + candCiv.nome_guerra : '#' + appState.votosFase4.Civil}\n\n` +
-    `Esta ação é confidencial, criptografada e definitiva.`;
+    `Esta ação é confidencial, criptografada e definitiva. O voto é intransferível.`;
 
   if (!confirm(resumo)) {
     return;
@@ -1795,7 +1733,10 @@ async function handleSubmeterVotoFase4(e) {
   try {
     const res = await fetch("/api/fase4/votar", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${eleitor.token}`
+      },
       body: JSON.stringify({
         identificador: eleitor.identificador,
         votos: appState.votosFase4
@@ -1845,23 +1786,14 @@ async function handleSubmeterVotoFase4(e) {
 
 function resetCabineVotacaoFase4() {
   appState.votosFase4 = { Graduados: null, Pracas: null, Civil: null };
-  const inputSaram = document.getElementById("fase4-input-saram");
-  if (inputSaram) inputSaram.value = "";
-  const feedback = document.getElementById("fase4-auth-feedback");
-  if (feedback) feedback.innerHTML = "";
   const avisoFalha = document.getElementById("fase4-voto-aviso-falha");
   if (avisoFalha) avisoFalha.innerHTML = "";
 
-  document.getElementById("fase4-box-cedula").style.display = "block";
+  document.getElementById("fase4-box-cedula").style.display = "none";
   document.getElementById("fase4-box-comprovante").style.display = "none";
 
-  renderizarCartoesCedulaClique("Graduados", "cedula-fase4-graduados", "badge-graduados");
-  renderizarCartoesCedulaClique("Pracas", "cedula-fase4-pracas", "badge-pracas");
-  renderizarCartoesCedulaClique("Civil", "cedula-fase4-civil", "badge-civil");
-  atualizarPillsProgressoFase4();
-
-  toggleTrocarEleitorFase4(true);
-  showToast("Cabine Liberada", "Informe o SARAM ou CPF do próximo votante.", "info");
+  logoutUsuario();
+  showToast("Cabine Liberada", "Sessão encerrada com segurança para o próximo votante. Efetue login para votar.", "info");
 }
 
 // ==========================================

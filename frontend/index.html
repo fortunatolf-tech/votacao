@@ -534,17 +534,35 @@
           </div>
         </div>
 
-        <!-- Painel Superior do Eleitor e Progresso da Escolha (Abre DIRETO na Cédula!) -->
-        <div class="vote-tracker-card" id="fase4-top-voter-card">
+        <!-- Alerta de Bloqueio por Falta de Autenticação na Fase 4 -->
+        <div id="fase4-box-bloqueio-auth" class="card" style="display: none; border-left: 4px solid var(--accent-red); margin-bottom: 1.5rem; text-align: center; padding: 2.5rem 1.5rem;">
+          <div style="font-size: 3rem; margin-bottom: 0.75rem;">🔒</div>
+          <h3 style="color: var(--primary-dark); margin-bottom: 0.5rem;">Cabine Eleitoral - Autenticação Obrigatória</h3>
+          <p style="color: var(--text-muted); max-width: 620px; margin: 0 auto 1.5rem auto; line-height: 1.6;">
+            Para garantir a lisura e o sigilo do pleito oficial do <strong>Padrão do Ano</strong>, o voto é estritamente pessoal e intransferível. 
+            Você deve estar autenticado com seu SARAM ou CPF e senha aprovada pelo Administrador na DPTI. Não é permitido votar sem autenticação ou em nome de terceiros.
+          </p>
+          <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+            <button type="button" class="btn btn-primary" onclick="abrirModalLogin()" style="padding: 0.6rem 1.5rem; font-size: 0.95rem;">
+              <span>🔑</span> Efetuar Login para Votar
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="navegarAba('fase0')" style="padding: 0.6rem 1.5rem; font-size: 0.95rem;">
+              <span>📝</span> Solicitar Cadastro / DPTI
+            </button>
+          </div>
+        </div>
+
+        <!-- Painel Superior do Eleitor Autenticado e Progresso da Escolha (Intransferível) -->
+        <div class="vote-tracker-card" id="fase4-top-voter-card" style="display: none;">
           <div>
-            <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.85;">Eleitor Ativo na Cabine</div>
+            <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.85;">🔒 Eleitor Autenticado (Voto Intransferível)</div>
             <div style="font-size: 1.15rem; font-weight: 800;">
-              <span id="fase4-eleitor-nome">Identificando eleitor...</span>
+              <span id="fase4-eleitor-nome">--</span>
               <span id="fase4-eleitor-divisao" class="badge badge-civil" style="margin-left: 0.5rem; font-size: 0.75rem;">--</span>
             </div>
             <div style="font-size: 0.78rem; opacity: 0.9; margin-top: 0.2rem;">
               SARAM / CPF: <code id="fase4-eleitor-identificador" style="color: #fef08a;">--</code> &bull; 
-              <a href="javascript:void(0)" onclick="toggleTrocarEleitorFase4()" style="color: #93c5fd; text-decoration: underline; font-weight: 600;">Trocar Eleitor (SARAM/CPF)</a>
+              <a href="javascript:void(0)" onclick="handleLogout()" style="color: #fca5a5; text-decoration: underline; font-weight: 600; margin-left: 0.5rem;">Sair / Trocar de Conta</a>
             </div>
           </div>
           <div>
@@ -555,19 +573,6 @@
               <span class="vote-tracker-pill pending" id="pill-status-civil">Civil: ⚪ Pendente</span>
             </div>
           </div>
-        </div>
-
-        <!-- Box Colapsável para Trocar Eleitor em Terminal Compartilhado -->
-        <div id="fase4-box-trocar-eleitor" style="display: none; background: #ffffff; border: 1px solid var(--border-color); border-radius: var(--radius); padding: 1rem; margin-bottom: 1.5rem; box-shadow: var(--shadow-sm);">
-          <form id="form-fase4-auth-inline" style="display: flex; gap: 0.5rem; align-items: flex-end; flex-wrap: wrap;">
-            <div style="flex: 1; min-width: 240px;">
-              <label class="form-label" style="font-size: 0.8rem;" for="fase4-input-saram">SARAM do Militar ou CPF do Servidor Civil:</label>
-              <input type="text" id="fase4-input-saram" class="form-control" placeholder="Digite o SARAM ou CPF do novo votante" required>
-            </div>
-            <button type="submit" class="btn btn-primary btn-sm">Confirmar Eleitor</button>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="toggleTrocarEleitorFase4()">Cancelar</button>
-          </form>
-          <div id="fase4-auth-feedback" style="margin-top: 0.5rem;"></div>
         </div>
 
         <!-- Cédula Digital de Voto por Clique (DIRETA SEM ETAPA INTERMEDIÁRIA) -->
