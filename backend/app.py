@@ -295,43 +295,94 @@ class DecisaoComandoFase5Input(BaseModel):
 async def obter_foto_integrante(identificador: str, saram: Optional[str] = None, nome: Optional[str] = None, tipo: Optional[str] = None):
     """
     Recupera a foto oficial do integrante indicado.
-    1. Tenta carregar do cache local em disco (data/cache_fotos/) ou fotos manuais (data/fotos/).
-    2. Se for militar e não estiver em cache, consulta a API SIGPES (homolog/produção) com decodificação base64.
-    3. Salva no cache local em disco para consultas subsequentes instantâneas.
-    4. Se for civil ou falhar, retorna um avatar vetorial SVG de alta qualidade oficial da FAB/COMARA.
+    1. Resolve o integrante na base de dados (efetivo) se identificador for ID ou SARAM/CPF.
+    2. Tenta carregar de data/fotos/ (fotos customizadas locais) ou data/cache_fotos/.
+    3. Consulta a API SIGPES homolog (http://api.servicos.homolog.ccarj.intraer/sigpesApi/fotoes/{saram_7}):
+       - Se for SARAM (5 a 8 dígitos), formata para 7 dígitos com zero à esquerda (ex.: 0804460).
+       - Se for CPF (11 dígitos), consulta /pesfisComgeps/search/findByNrCpf para obter o nrOrdem do militar/civil.
+       - Decodifica base64 da foto e armazena em cache local para consultas subsequentes instantâneas.
+    4. Se for civil sem foto no SIGPES ou ocorrer falha de rede, gera e retorna avatar vetorial SVG oficial da FAB/COMARA.
     """
     alvo = (saram or identificador or "").strip()
     if not alvo or ".." in alvo or "/" in alvo or "\\" in alvo:
         raise HTTPException(status_code=400, detail="Identificador inválido.")
+
+    # 1. Tentar resolver dados oficiais na tabela efetivo (por id numérico ou identificador)
+    nome_candidato = nome or ""
+    tipo_candidato = (tipo or "").upper()
+    identificador_oficial = alvo
     
-    digitos = re.sub(r"\D", "", alvo)
-    alvo_seguro = re.sub(r"[^\w\.\-]", "", alvo)
-    
-    # 1. Verificar fotos customizadas em data/fotos/ (com validação estrita de path traversal)
+    try:
+        conn = get_db_connection()
+        c = conn.cursor()
+        row_ef = None
+        if alvo.isdigit():
+            c.execute("SELECT * FROM efetivo WHERE id = ? LIMIT 1", (int(alvo),))
+            row_ef = c.fetchone()
+        if not row_ef:
+            c.execute("""
+            SELECT * FROM efetivo 
+            WHERE identificador = ? 
+               OR REPLACE(REPLACE(REPLACE(identificador, '.', ''), '-', ''), ' ', '') = ?
+            LIMIT 1
+            """, (alvo, re.sub(r"\D", "", alvo) or alvo))
+            row_ef = c.fetchone()
+        conn.close()
+
+        if row_ef:
+            identificador_oficial = row_ef["identificador"] or alvo
+            nome_candidato = nome_candidato or row_ef["nome_guerra"] or row_ef["nome"]
+            tipo_candidato = tipo_candidato or row_ef["tipo"]
+    except Exception:
+        pass
+
+    digitos = re.sub(r"\D", "", identificador_oficial)
+    alvo_seguro = re.sub(r"[^\w\.\-]", "", identificador_oficial)
+    saram_7 = digitos.zfill(7) if (digitos and len(digitos) <= 7) else ""
+
+    # 2. Verificar fotos manuais em data/fotos/
+    chaves_busca = [k for k in [saram_7, digitos, alvo_seguro, alvo] if k]
     for ext in ["jpg", "jpeg", "png", "webp"]:
-        for k in [digitos, alvo_seguro]:
-            if not k:
-                continue
+        for k in chaves_busca:
             path_manual = os.path.abspath(os.path.join(MANUAL_FOTOS_DIR, f"{k}.{ext}"))
             if path_manual.startswith(MANUAL_FOTOS_DIR) and os.path.exists(path_manual):
                 mime = "image/png" if ext == "png" else "image/jpeg"
                 return FileResponse(path_manual, media_type=mime, headers={"Cache-Control": "public, max-age=86400"})
-                
-    # 2. Verificar cache local em disco data/cache_fotos/
-    if digitos:
-        cache_file = os.path.join(CACHE_FOTOS_DIR, f"{digitos}.jpg")
+
+    # 3. Verificar cache em disco data/cache_fotos/
+    for k in chaves_busca:
+        cache_file = os.path.join(CACHE_FOTOS_DIR, f"{k}.jpg")
         if os.path.exists(cache_file):
             return FileResponse(cache_file, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
 
-    # 3. Consulta à API SIGPES (Intraer) se tiver formato de SARAM (tipicamente 6 a 7 dígitos)
-    if digitos and 5 <= len(digitos) <= 8 and (tipo or "MILITAR").upper() == "MILITAR":
+    # 4. Consulta à API SIGPES Homolog (ccarj.intraer/sigpesApi)
+    nr_ordem_alvo = None
+    if digitos:
+        if len(digitos) == 11:
+            # CPF: busca nrOrdem via pesfisComgeps
+            try:
+                async with httpx.AsyncClient(timeout=4.0, follow_redirects=True) as client:
+                    resp_cpf = await client.get(f"{SIGPES_API_HOMOLOG}/pesfisComgeps/search/findByNrCpf?nrCpf={digitos}")
+                    if 200 <= resp_cpf.status_code < 300:
+                        data_cpf = resp_cpf.json()
+                        embedded = data_cpf.get("_embedded", {}).get("pesfisComgeps", [])
+                        if embedded and embedded[0].get("nrOrdem"):
+                            nr_ordem_alvo = str(embedded[0]["nrOrdem"]).strip().zfill(7)
+            except Exception:
+                pass
+        elif len(digitos) <= 8:
+            nr_ordem_alvo = digitos.zfill(7)
+
+    if nr_ordem_alvo:
         urls = [
-            f"{SIGPES_API_HOMOLOG}/fotoes/{digitos}",
-            f"{SIGPES_API_PROD}/fotoes/{digitos}"
+            f"{SIGPES_API_HOMOLOG}/fotoes/{nr_ordem_alvo}",
         ]
+        if nr_ordem_alvo != digitos and len(digitos) >= 5:
+            urls.append(f"{SIGPES_API_HOMOLOG}/fotoes/{digitos}")
+
         for url in urls:
             try:
-                async with httpx.AsyncClient(timeout=2.5, follow_redirects=True) as client:
+                async with httpx.AsyncClient(timeout=6.0, follow_redirects=True) as client:
                     resp = await client.get(url)
                     if 200 <= resp.status_code < 300:
                         data = resp.json()
@@ -342,35 +393,33 @@ async def obter_foto_integrante(identificador: str, saram: Optional[str] = None,
                             base64_str = data.get("imFoto")
 
                         if base64_str:
+                            if "," in base64_str:
+                                base64_str = base64_str.split(",", 1)[1]
+                            base64_str = base64_str.strip().replace("\n", "").replace("\r", "")
                             foto_bytes = base64.b64decode(base64_str)
-                            cache_file = os.path.join(CACHE_FOTOS_DIR, f"{digitos}.jpg")
-                            with open(cache_file, "wb") as f:
-                                f.write(foto_bytes)
+                            
+                            for k in set([nr_ordem_alvo, digitos, saram_7]):
+                                if k:
+                                    cpath = os.path.join(CACHE_FOTOS_DIR, f"{k}.jpg")
+                                    with open(cpath, "wb") as f:
+                                        f.write(foto_bytes)
+
+                            mime_type = data.get("tpArq") or "image/jpeg"
                             return Response(
                                 content=foto_bytes,
-                                media_type="image/jpeg",
+                                media_type=mime_type,
                                 headers={"Cache-Control": "public, max-age=86400"}
                             )
             except Exception:
                 pass
 
-    # 4. Fallback: Buscar dados no banco para o avatar SVG se nome/tipo não vieram na query
-    nome_exibicao = nome or ""
-    tipo_exibicao = (tipo or "MILITAR").upper()
-    if not nome_exibicao and digitos:
-        try:
-            conn = get_db_connection()
-            c = conn.cursor()
-            c.execute("SELECT nome_guerra, tipo, posto_grad_cargo FROM efetivo WHERE REPLACE(REPLACE(identificador, '.', ''), '-', '') = ? LIMIT 1", (digitos,))
-            row = c.fetchone()
-            conn.close()
-            if row:
-                nome_exibicao = f"{row['posto_grad_cargo']} {row['nome_guerra']}"
-                tipo_exibicao = row['tipo'].upper()
-        except Exception:
-            pass
-
-    svg_avatar = gerar_avatar_svg(nome_exibicao, tipo_exibicao, subtexto=f"ID {digitos}" if digitos else "COMARA")
+    # 5. Fallback: Avatar vetorial oficial FAB/COMARA
+    sub = f"ID {identificador_oficial}" if identificador_oficial else "COMARA"
+    svg_avatar = gerar_avatar_svg(
+        nome=nome_candidato or "INTEGRANTE",
+        tipo=tipo_candidato or "MILITAR",
+        subtexto=sub
+    )
     return Response(content=svg_avatar, media_type="image/svg+xml", headers={"Cache-Control": "public, max-age=3600"})
 
 # ----------------- 1. AUTO-CADASTRO E GESTÃO DPTI -----------------
@@ -562,16 +611,27 @@ async def upload_efetivo(arquivo: UploadFile = File(...), admin_user: dict = Dep
     header = [h.lower().replace(" ", "").replace("_", "").replace("/", "") for h in linhas[0]]
     
     def encontrar_coluna(termos: List[str]) -> int:
-        for i, h in enumerate(header):
-            for t in termos:
-                if t in h:
+        for t in termos:
+            t_clean = t.lower().replace(" ", "").replace("_", "").replace("/", "")
+            # 1. Correspondência exata primeiro
+            for i, h in enumerate(header):
+                if h == t_clean:
                     return i
+            # 2. Correspondência de prefixo ou sufixo
+            for i, h in enumerate(header):
+                if h.startswith(t_clean) or h.endswith(t_clean):
+                    return i
+            # 3. Substring para termos com mais de 2 letras
+            if len(t_clean) > 2:
+                for i, h in enumerate(header):
+                    if t_clean in h:
+                        return i
         return -1
 
     col_posto = encontrar_coluna(["postograd", "posto", "grad", "cargo"])
     col_esp = encontrar_coluna(["esp", "especialidade", "quadro"])
     col_nome = encontrar_coluna(["nomecompleto", "nome"])
-    col_guerra = encontrar_coluna(["nomeguerra", "guerra"])
+    col_guerra = encontrar_coluna(["nomeguerra", "nomedeguerra", "guerra"])
     col_ident = encontrar_coluna(["saramcpf", "saram", "cpf", "identificador", "matricula", "id"])
     col_cat = encontrar_coluna(["classeeleitoral", "classe", "categoria"])
     col_div = encontrar_coluna(["divisao", "divisão", "div"])

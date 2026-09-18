@@ -370,20 +370,32 @@ def importar():
         nomes_vistos.add(nome)
         
         ordem_num = int(ordem) if ordem.isdigit() else len(militares_processados)
-        
-        # Gerar SARAM oficial padronizado (7 dígitos)
-        if posto in ["CL", "TC", "MAJ", "CP", "1T", "2T"]:
-            saram = f"{3800000 + ordem_num:07d}"
-            tempo_meses = 72 - ordem_num // 2
-        elif posto in ["SO", "1S", "2S", "3S"]:
-            saram = f"{6000000 + ordem_num:07d}"
-            tempo_meses = 60 - (ordem_num - 60) // 3
-        else: # CB, S1, S2
-            saram = f"{7000000 + ordem_num:07d}"
-            tempo_meses = 36 - (ordem_num - 150) // 5
-            
-        tempo_meses = max(tempo_meses, 12)
         categoria = determinar_classe(posto)
+        
+        # Pool de SARAMs oficiais com fotos ativas e validadas na API SIGPES Homolog (Intraer)
+        SARAMS_FOTOS_OFICIAIS = [
+            "0804460", "2408589", "2282100", "0948292", "0010359", "3438708", "3100790", "3290972", "1741985"
+        ]
+        SARAMS_FOTOS_GRADUADOS = [
+            "6032885", "6088708", "6210139", "4199855", "1676431", "2991284"
+        ]
+        SARAMS_FOTOS_PRACAS = [
+            "4388445", "4338790", "4228812", "0917214"
+        ]
+
+        # Atribuir SARAMs com fotos ativas no SIGPES homolog aos primeiros integrantes de cada categoria
+        if categoria == "Oficiais":
+            idx_of = sum(1 for m in militares_processados if m["categoria"] == "Oficiais")
+            saram = SARAMS_FOTOS_OFICIAIS[idx_of] if idx_of < len(SARAMS_FOTOS_OFICIAIS) else f"{3800000 + ordem_num:07d}"
+            tempo_meses = max(72 - ordem_num // 2, 12)
+        elif categoria == "Graduados":
+            idx_grad = sum(1 for m in militares_processados if m["categoria"] == "Graduados")
+            saram = SARAMS_FOTOS_GRADUADOS[idx_grad] if idx_grad < len(SARAMS_FOTOS_GRADUADOS) else f"{6000000 + ordem_num:07d}"
+            tempo_meses = max(60 - (ordem_num - 60) // 3, 12)
+        else: # Pracas
+            idx_pr = sum(1 for m in militares_processados if m["categoria"] == "Pracas")
+            saram = SARAMS_FOTOS_PRACAS[idx_pr] if idx_pr < len(SARAMS_FOTOS_PRACAS) else f"{7000000 + ordem_num:07d}"
+            tempo_meses = max(36 - (ordem_num - 150) // 5, 12)
         divisao, secao = determinar_lotacao(posto, esp, guerra)
         
         tel_formatado = f"({ddd}) {tel}" if tel else f"({ddd})"

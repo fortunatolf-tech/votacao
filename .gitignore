@@ -51,3 +51,6 @@ htmlcov/
 
 # Portable local tools
 .git-portable/
+
+# Cache de fotos em disco (baixadas da API Intraer em tempo de execução)
+data/cache_fotos/
